@@ -2,11 +2,8 @@
 
 import { useTrip } from '@/context/TripContext'
 import { Button } from '@/components/ui/Button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { ProgressBar } from '@/components/ui/ProgressBar'
-import { StopProgress } from './StopProgress'
-import { CurrentStop } from './CurrentStop'
-import { MapView } from '@/components/map/MapView'
+import { Card, CardContent } from '@/components/ui/Card'
+import { DriverModeView } from './DriverModeView'
 
 export function ExecutionView() {
   const {
@@ -14,7 +11,6 @@ export function ExecutionView() {
     routes,
     selectedRouteType,
     executionState,
-    markStopComplete,
     endExecution,
   } = useTrip()
 
@@ -22,13 +18,8 @@ export function ExecutionView() {
   if (!selectedRoute) return null
 
   const { orderedStopIds } = selectedRoute
-  const { currentStopIndex, completedStopIds } = executionState
   const totalStops = orderedStopIds.length
-  const completedCount = completedStopIds.length
   const isComplete = trip.status === 'completed'
-
-  const currentStopId = orderedStopIds[currentStopIndex]
-  const currentStop = trip.stops.find((s) => s.id === currentStopId)
 
   if (isComplete) {
     return (
@@ -53,69 +44,5 @@ export function ExecutionView() {
     )
   }
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Executing Trip</h1>
-          <p className="text-sm text-gray-500">
-            {selectedRouteType === 'optimized' ? 'Optimized' : 'FIFO'} route
-          </p>
-        </div>
-        <Button variant="danger" onClick={endExecution}>
-          End Trip
-        </Button>
-      </div>
-
-      {/* Progress */}
-      <div className="mb-6">
-        <ProgressBar
-          value={completedCount}
-          max={totalStops}
-          label={`${completedCount} of ${totalStops} stops completed`}
-        />
-      </div>
-
-      {/* Main content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left panel - Stop list and current stop */}
-        <div className="lg:col-span-1 space-y-4">
-          <Card>
-            <CardHeader className="py-3">
-              <CardTitle className="text-base">Stops</CardTitle>
-            </CardHeader>
-            <CardContent className="py-2">
-              <StopProgress
-                stops={trip.stops}
-                orderedStopIds={orderedStopIds}
-                completedStopIds={completedStopIds}
-                currentStopIndex={currentStopIndex}
-              />
-            </CardContent>
-          </Card>
-
-          {currentStop && (
-            <CurrentStop
-              stop={currentStop}
-              stopNumber={currentStopIndex + 1}
-              onMarkComplete={markStopComplete}
-            />
-          )}
-        </div>
-
-        {/* Right panel - Map */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader className="py-3">
-              <CardTitle className="text-base">Route Map</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              <MapView />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  )
+  return <DriverModeView />
 }

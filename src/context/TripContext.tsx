@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import { Trip, Stop, Route, ExecutionState, Coordinates } from '@/types'
+import { Trip, Stop, Route, ExecutionState, Coordinates, DriverLocation, TrackingMode } from '@/types'
 import { DEFAULT_ORIGIN_ADDRESS, DEFAULT_ORIGIN_COORDINATES } from '@/lib/constants'
 import { generateStopId } from '@/data/demo'
 
@@ -33,6 +33,11 @@ interface TripContextType {
   startExecution: () => void
   markStopComplete: () => void
   endExecution: () => void
+  
+  // Driver location
+  setDriverLocation: (location: DriverLocation | null) => void
+  setTrackingMode: (mode: TrackingMode) => void
+  setLocationPermission: (granted: boolean | null) => void
 }
 
 const TripContext = createContext<TripContextType | undefined>(undefined)
@@ -54,6 +59,9 @@ function createEmptyExecutionState(): ExecutionState {
     currentStopIndex: 0,
     completedStopIds: [],
     startedAt: null,
+    driverLocation: null,
+    trackingMode: 'follow',
+    hasLocationPermission: null,
   }
 }
 
@@ -163,6 +171,9 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       currentStopIndex: 0,
       completedStopIds: [],
       startedAt: new Date(),
+      driverLocation: null,
+      trackingMode: 'follow',
+      hasLocationPermission: null,
     })
   }, [routes, selectedRouteType])
 
@@ -192,6 +203,27 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     clearTrip()
   }, [clearTrip])
 
+  const setDriverLocation = useCallback((location: DriverLocation | null) => {
+    setExecutionState((prev) => ({
+      ...prev,
+      driverLocation: location,
+    }))
+  }, [])
+
+  const setTrackingMode = useCallback((mode: TrackingMode) => {
+    setExecutionState((prev) => ({
+      ...prev,
+      trackingMode: mode,
+    }))
+  }, [])
+
+  const setLocationPermission = useCallback((granted: boolean | null) => {
+    setExecutionState((prev) => ({
+      ...prev,
+      hasLocationPermission: granted,
+    }))
+  }, [])
+
   return (
     <TripContext.Provider
       value={{
@@ -214,6 +246,9 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
         startExecution,
         markStopComplete,
         endExecution,
+        setDriverLocation,
+        setTrackingMode,
+        setLocationPermission,
       }}
     >
       {children}

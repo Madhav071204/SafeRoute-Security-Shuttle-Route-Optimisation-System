@@ -52,10 +52,24 @@ export interface Settings {
   originCoordinates: Coordinates
 }
 
+// Driver location for live tracking
+export interface DriverLocation {
+  coordinates: Coordinates
+  heading: number | null
+  accuracy: number
+  timestamp: number
+}
+
+// Map tracking mode during execution
+export type TrackingMode = 'follow' | 'overview'
+
 export interface ExecutionState {
   currentStopIndex: number
   completedStopIds: string[]
   startedAt: Date | null
+  driverLocation: DriverLocation | null
+  trackingMode: TrackingMode
+  hasLocationPermission: boolean | null // null = not asked yet
 }
 
 // API types
