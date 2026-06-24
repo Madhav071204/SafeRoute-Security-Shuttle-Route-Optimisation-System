@@ -44,7 +44,6 @@ export function DriverMapView({
     const initMap = async () => {
       try {
         const mapboxgl = (await import('mapbox-gl')).default
-        await import('mapbox-gl/dist/mapbox-gl.css')
 
         mapboxgl.accessToken = token
 
@@ -63,9 +62,16 @@ export function DriverMapView({
 
         map.on('load', () => {
           setIsMapLoaded(true)
+          setTimeout(() => map.resize(), 0)
         })
 
         mapRef.current = map
+
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.resize()
+          }
+        }, 100)
       } catch (error) {
         console.error('Map initialization error:', error)
         setMapError('Failed to initialize map')
@@ -375,9 +381,17 @@ export function DriverMapView({
     onTrackingModeChange('overview')
   }, [handleFitBounds, onTrackingModeChange])
 
+  useEffect(() => {
+    if (mapRef.current && isMapLoaded) {
+      setTimeout(() => {
+        mapRef.current?.resize()
+      }, 100)
+    }
+  }, [driverLocation, isMapLoaded])
+
   if (mapError) {
     return (
-      <div className="bg-gray-100 rounded-lg h-full min-h-[400px] flex items-center justify-center">
+      <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
         <div className="text-center p-4">
           <p className="text-red-600 font-medium">{mapError}</p>
           <p className="text-gray-500 text-sm mt-2">
@@ -397,10 +411,10 @@ export function DriverMapView({
   }
 
   return (
-    <div className="relative h-full min-h-[400px]">
+    <div className="absolute inset-0">
       <div
         ref={mapContainerRef}
-        className="absolute inset-0 rounded-lg"
+        className="absolute inset-0"
       />
 
       {/* Map controls overlay */}

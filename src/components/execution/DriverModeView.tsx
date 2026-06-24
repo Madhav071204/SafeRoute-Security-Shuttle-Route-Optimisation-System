@@ -117,7 +117,7 @@ export function DriverModeView() {
       )}
 
       {/* Map - main content area */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative min-h-0">
         <DriverMapView
           driverLocation={executionState.driverLocation}
           trackingMode={trackingMode}
