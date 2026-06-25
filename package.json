@@ -21,6 +21,8 @@
   "homepage": "https://github.com/Madhav071204/SafeRoute-Security-Shuttle-Route-Optimisation-System#readme",
   "description": "",
   "dependencies": {
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.41.0",
     "mapbox-gl": "^3.25.0",
     "next": "^16.2.9",
     "react": "^19.2.7",

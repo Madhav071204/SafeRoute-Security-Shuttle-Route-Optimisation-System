@@ -90,20 +90,23 @@ export function MapView() {
         const el = document.createElement('div')
         el.className = 'marker'
         el.style.cssText = `
-          width: 28px;
-          height: 28px;
-          background-color: #2563eb;
-          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+          border-radius: 10px;
           display: flex;
           align-items: center;
           justify-content: center;
           color: white;
-          font-size: 12px;
-          font-weight: bold;
+          font-size: 13px;
+          font-weight: 700;
           border: 2px solid white;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+          transition: transform 0.2s ease;
         `
         el.textContent = String(displayNumber)
+        el.onmouseenter = () => { el.style.transform = 'scale(1.1)' }
+        el.onmouseleave = () => { el.style.transform = 'scale(1)' }
 
         const marker = new mapboxgl.Marker({ element: el })
           .setLngLat([stop.coordinates!.lng, stop.coordinates!.lat])
@@ -218,16 +221,21 @@ export function MapView() {
 
   if (mapError) {
     return (
-      <div className="bg-gray-100 rounded-lg h-96 flex items-center justify-center">
-        <div className="text-center p-4">
-          <p className="text-red-600 font-medium">{mapError}</p>
-          <p className="text-gray-500 text-sm mt-2">
+      <div className="bg-surface-100 dark:bg-surface-800 rounded-xl h-full min-h-[400px] flex items-center justify-center">
+        <div className="text-center p-6">
+          <div className="w-12 h-12 rounded-xl bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-danger-600 dark:text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <p className="text-danger-600 dark:text-danger-400 font-medium">{mapError}</p>
+          <p className="text-surface-500 dark:text-surface-400 text-sm mt-2">
             Get a free API key at{' '}
             <a
               href="https://account.mapbox.com/access-tokens/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary-600 underline"
+              className="text-primary-600 dark:text-primary-400 underline hover:no-underline"
             >
               mapbox.com
             </a>
@@ -240,7 +248,7 @@ export function MapView() {
   return (
     <div
       ref={mapContainerRef}
-      className="rounded-lg h-96 w-full"
+      className="rounded-xl h-full w-full overflow-hidden"
       style={{ minHeight: '400px' }}
     />
   )
