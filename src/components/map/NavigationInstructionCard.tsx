@@ -47,32 +47,34 @@ export function NavigationInstructionCard({
     <div className="px-4 sm:px-5 pb-3">
       {/* Recalculating or Off-Route Banner */}
       <AnimatePresence>
-        {(isRecalculating || isOffRoute) && (
+        {isRecalculating && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             className="mb-3"
           >
-            <div className={clsx(
-              'rounded-xl px-3 py-2 flex items-center gap-2',
-              isOffRoute
-                ? 'bg-warning-100 dark:bg-warning-900/30 text-warning-700 dark:text-warning-300'
-                : 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-            )}>
-              {isRecalculating ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm font-medium">Recalculating route...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <span className="text-sm font-medium">Off route - recalculating...</span>
-                </>
-              )}
+            <div className="rounded-xl px-3 py-2 flex items-center gap-2 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm font-medium">Updating route...</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isOffRoute && !isRecalculating && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mb-3"
+          >
+            <div className="rounded-xl px-3 py-2 flex items-center gap-2 bg-warning-100 dark:bg-warning-900/30 text-warning-700 dark:text-warning-300">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-sm font-medium">Off route detected</span>
             </div>
           </motion.div>
         )}

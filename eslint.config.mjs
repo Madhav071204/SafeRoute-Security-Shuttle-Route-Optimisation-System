@@ -11,4 +11,13 @@ const compat = new FlatCompat({
 
 export default [
   ...compat.extends("next/core-web-vitals"),
+  {
+    ignores: [".next/**", "node_modules/**"],
+  },
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "react/no-unescaped-entities": "off",
+    },
+  },
 ];

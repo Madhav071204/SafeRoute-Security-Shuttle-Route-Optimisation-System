@@ -10,7 +10,8 @@ interface StopListProps {
 }
 
 export function StopList({ disabled }: StopListProps) {
-  const { trip, updateStop, removeStop } = useTrip()
+  const { trip, updateStop, removeStop, executionState } = useTrip()
+  const driverLocation = executionState.driverLocation?.coordinates || null
 
   if (trip.stops.length === 0) {
     return (
@@ -77,6 +78,7 @@ export function StopList({ disabled }: StopListProps) {
                 onUpdate={(updates) => updateStop(stop.id, updates)}
                 onRemove={() => removeStop(stop.id)}
                 disabled={disabled}
+                driverLocation={driverLocation}
               />
             </motion.div>
           ))}

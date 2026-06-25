@@ -35,17 +35,19 @@ export function TripPanel() {
   const [originStatus, setOriginStatus] = useState<{ message: string; type: 'success' | 'warning' } | null>(null)
 
   const canAddStop = trip.stops.length < MAX_STOPS
-  const canGeocode = trip.stops.length > 0 && trip.stops.some((s) => s.address.trim() !== '')
-  const canOptimize =
-    trip.stops.length >= MIN_STOPS_FOR_OPTIMIZATION &&
-    trip.stops.every((s) => s.geocodeStatus === 'success')
   const hasRoutes = routes.fifo && routes.optimized
   const isExecuting = trip.status === 'executing'
   const isDisabled = isGeocoding || isOptimizing || isExecuting
 
-  const allGeocoded = trip.stops.length > 0 && trip.stops.every((s) => s.geocodeStatus === 'success')
+  const stopsWithCoordinates = trip.stops.filter((s) => s.coordinates !== null)
+  const stopsWithAddressButNoCoords = trip.stops.filter((s) => s.address.trim() !== '' && s.coordinates === null)
+  
+  const allStopsHaveCoordinates = trip.stops.length > 0 && stopsWithCoordinates.length === trip.stops.length
+  const canOptimize = stopsWithCoordinates.length >= MIN_STOPS_FOR_OPTIMIZATION
+  const canGeocode = stopsWithAddressButNoCoords.length > 0
   const hasGeocodingErrors = trip.stops.some((s) => s.geocodeStatus === 'failed')
-  const pendingGeocoding = trip.stops.some((s) => s.address.trim() !== '' && s.geocodeStatus === 'pending')
+  
+  const showGeocodeButton = canGeocode && !allStopsHaveCoordinates
 
   const handleLoadDemo = () => {
     loadDemoData(createDemoStops())
@@ -259,18 +261,18 @@ export function TripPanel() {
       <CardContent className="space-y-4">
         <div className="flex gap-2">
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
             onClick={handleLoadDemo}
             disabled={isDisabled || trip.stops.length > 0}
-            className="flex-1"
+            className="flex-1 text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200"
             leftIcon={
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
               </svg>
             }
           >
-            Load Demo
+            Load Demo Data
           </Button>
           <Button
             variant="ghost"
@@ -308,14 +310,14 @@ export function TripPanel() {
           </Button>
 
           <AnimatePresence mode="wait">
-            {pendingGeocoding && (
+            {showGeocodeButton && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
               >
                 <Button
-                  variant="primary"
+                  variant="secondary"
                   onClick={handleGeocode}
                   disabled={!canGeocode || isDisabled}
                   isLoading={isGeocoding}
@@ -328,14 +330,14 @@ export function TripPanel() {
                     )
                   }
                 >
-                  {isGeocoding ? 'Locating Addresses...' : 'Locate All Addresses'}
+                  {isGeocoding ? 'Locating...' : `Locate ${stopsWithAddressButNoCoords.length} Address${stopsWithAddressButNoCoords.length > 1 ? 'es' : ''}`}
                 </Button>
               </motion.div>
             )}
           </AnimatePresence>
 
           <AnimatePresence mode="wait">
-            {allGeocoded && !hasRoutes && (
+            {canOptimize && !hasRoutes && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}

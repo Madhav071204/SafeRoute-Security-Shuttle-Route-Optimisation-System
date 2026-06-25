@@ -1,7 +1,10 @@
 'use client'
 
+import { useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Stop } from '@/types'
+import { Stop, Coordinates } from '@/types'
+import { SearchSuggestion } from '@/types/location'
+import { AddressSearchInput } from '@/components/stops/AddressSearchInput'
 import clsx from 'clsx'
 
 interface StopInputProps {
@@ -10,19 +13,20 @@ interface StopInputProps {
   onUpdate: (updates: Partial<Stop>) => void
   onRemove: () => void
   disabled?: boolean
+  driverLocation?: Coordinates | null
 }
 
-export function StopInput({ stop, index, onUpdate, onRemove, disabled }: StopInputProps) {
+export function StopInput({ stop, index, onUpdate, onRemove, disabled, driverLocation }: StopInputProps) {
   const statusConfig = {
     pending: {
       dot: 'bg-surface-400 dark:bg-surface-500',
       ring: '',
-      label: 'Pending location',
+      label: 'Search for a destination',
     },
     success: {
       dot: 'bg-success-500',
       ring: 'ring-2 ring-success-500/20',
-      label: 'Location found',
+      label: 'Location selected',
     },
     failed: {
       dot: 'bg-danger-500',
@@ -32,6 +36,26 @@ export function StopInput({ stop, index, onUpdate, onRemove, disabled }: StopInp
   }
 
   const status = statusConfig[stop.geocodeStatus]
+
+  const handleAddressChange = useCallback((value: string) => {
+    if (value !== stop.address) {
+      onUpdate({ 
+        address: value, 
+        geocodeStatus: 'pending', 
+        coordinates: null,
+        geocodeError: undefined,
+      })
+    }
+  }, [stop.address, onUpdate])
+
+  const handleAddressSelect = useCallback((suggestion: SearchSuggestion) => {
+    onUpdate({
+      address: suggestion.fullAddress || suggestion.displayName,
+      coordinates: suggestion.coordinates,
+      geocodeStatus: 'success',
+      geocodeError: undefined,
+    })
+  }, [onUpdate])
 
   return (
     <div
@@ -95,51 +119,22 @@ export function StopInput({ stop, index, onUpdate, onRemove, disabled }: StopInp
             </div>
           </div>
 
-          {/* Destination Address Field */}
+          {/* Destination Address Field with Autocomplete */}
           <div className="space-y-1.5">
             <label className="block text-xs font-medium text-surface-500 dark:text-surface-400 uppercase tracking-wider">
-              Destination Address
+              Destination
               <span className="text-danger-500 ml-0.5">*</span>
             </label>
-            <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500 pointer-events-none">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="e.g. 123 Main Street, Sydney NSW"
-                value={stop.address}
-                onChange={(e) => onUpdate({ address: e.target.value, geocodeStatus: 'pending', coordinates: null })}
-                disabled={disabled}
-                className={clsx(
-                  'w-full pl-10 pr-4 py-2.5 rounded-lg text-sm',
-                  'bg-surface-50 dark:bg-surface-900/50',
-                  'text-surface-900 dark:text-surface-100',
-                  'placeholder:text-surface-400 dark:placeholder:text-surface-500',
-                  'focus:outline-none focus:ring-2 focus:ring-primary-500/30',
-                  'transition-colors duration-200',
-                  disabled && 'opacity-50 cursor-not-allowed',
-                  stop.geocodeStatus === 'failed'
-                    ? 'border-2 border-danger-400 dark:border-danger-500 focus:border-danger-500'
-                    : 'border border-surface-200 dark:border-surface-600 focus:border-primary-500 dark:focus:border-primary-400 hover:border-surface-300 dark:hover:border-surface-500'
-                )}
-              />
-            </div>
-            {stop.geocodeStatus === 'failed' && stop.geocodeError && (
-              <motion.p
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-1.5 text-xs text-danger-600 dark:text-danger-400 mt-1"
-              >
-                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                {stop.geocodeError}
-              </motion.p>
-            )}
+            <AddressSearchInput
+              value={stop.address}
+              onChange={handleAddressChange}
+              onSelect={handleAddressSelect}
+              placeholder="Search address, place, or landmark..."
+              disabled={disabled}
+              hasError={stop.geocodeStatus === 'failed'}
+              errorMessage={stop.geocodeError}
+              proximity={driverLocation || undefined}
+            />
           </div>
 
           {/* Success indicator */}
@@ -152,7 +147,7 @@ export function StopInput({ stop, index, onUpdate, onRemove, disabled }: StopInp
               <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
-              <span className="font-medium">Location verified</span>
+              <span className="font-medium">Location selected</span>
             </motion.div>
           )}
         </div>

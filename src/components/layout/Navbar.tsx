@@ -10,6 +10,7 @@ export function Navbar() {
   const pathname = usePathname()
 
   const navLinks = [
+    { href: '/dashboard', label: 'Dashboard' },
     { href: '/settings', label: 'Settings' },
     { href: '/about', label: 'About' },
   ]

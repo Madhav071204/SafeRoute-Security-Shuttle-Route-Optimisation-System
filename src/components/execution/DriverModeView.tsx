@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTrip } from '@/context/TripContext'
 import { useDriverLocation } from '@/hooks/useDriverLocation'
@@ -9,9 +9,14 @@ import { NavigationInstructionCard } from '@/components/map/NavigationInstructio
 import { CurrentStopCard } from './CurrentStopCard'
 import { UpcomingStopsDrawer } from './UpcomingStopsDrawer'
 import { Button } from '@/components/ui/Button'
-import { fetchDirections, calculateDistanceToPoint, findCurrentStepIndex, isOffRoute, getRemainingDistance, getRemainingDuration } from '@/lib/directions'
+import { fetchDirections, calculateDistanceToPoint, findCurrentStepIndex, isOffRoute, getRemainingDistance, getRemainingDuration, getDistanceToRoute, calculateOffRouteThreshold } from '@/lib/directions'
 import { Coordinates } from '@/types'
 import clsx from 'clsx'
+
+// Constants for off-route detection
+const RECALCULATION_COOLDOWN_MS = 15000 // 15 seconds between recalculations
+const CONSECUTIVE_OFF_ROUTE_REQUIRED = 3 // Need 3 consecutive off-route readings
+const POST_ROUTE_UPDATE_GRACE_PERIOD_MS = 10000 // 10 seconds grace after route update
 
 export function DriverModeView() {
   const {
@@ -42,6 +47,12 @@ export function DriverModeView() {
   const [isBottomSheetExpanded, setIsBottomSheetExpanded] = useState(false)
   const [navigationError, setNavigationError] = useState<string | null>(null)
   const [isInitialFetch, setIsInitialFetch] = useState(true)
+  
+  // Off-route tracking refs (using refs to avoid causing re-renders)
+  const consecutiveOffRouteCountRef = useRef(0)
+  const lastRecalculationTimeRef = useRef(0)
+  const routeUpdatedAtRef = useRef(0)
+  const isFetchingRef = useRef(false)
 
   const selectedRoute = selectedRouteType === 'fifo' ? routes.fifo : routes.optimized
   if (!selectedRoute) return null
@@ -62,19 +73,38 @@ export function DriverModeView() {
   }, [currentStop])
 
   // Fetch navigation route
-  const fetchNavigationRoute = useCallback(async () => {
+  const fetchNavigationRoute = useCallback(async (isRecalculation: boolean = false) => {
     if (!driverLocation || !destinationCoordinates) {
+      console.log('[Navigation] Cannot fetch: missing driver location or destination')
       return
     }
 
-    // Prevent too frequent recalculations
+    // Prevent concurrent fetches
+    if (isFetchingRef.current) {
+      console.log('[Navigation] Fetch already in progress, skipping')
+      return
+    }
+
     const now = Date.now()
-    if (navigationState.lastRecalculatedAt && now - navigationState.lastRecalculatedAt < 5000) {
-      return
+    
+    // Check cooldown for recalculations (not for initial fetch)
+    if (isRecalculation) {
+      const timeSinceLastRecalc = now - lastRecalculationTimeRef.current
+      if (timeSinceLastRecalc < RECALCULATION_COOLDOWN_MS) {
+        console.log('[Navigation] Recalculation cooldown active:', {
+          timeSinceLastRecalc,
+          cooldown: RECALCULATION_COOLDOWN_MS,
+          remainingMs: RECALCULATION_COOLDOWN_MS - timeSinceLastRecalc,
+        })
+        return
+      }
     }
 
+    isFetchingRef.current = true
     setIsRecalculating(true)
     setNavigationError(null)
+
+    console.log('[Navigation] Fetching route...', { isRecalculation })
 
     try {
       const response = await fetchDirections(
@@ -83,6 +113,11 @@ export function DriverModeView() {
       )
 
       if (response.success && response.route) {
+        const updateTime = Date.now()
+        lastRecalculationTimeRef.current = updateTime
+        routeUpdatedAtRef.current = updateTime
+        consecutiveOffRouteCountRef.current = 0 // Reset off-route count
+        
         setNavigationRoute(response.route)
         setNavigationState({
           destinationStopId: currentStopId,
@@ -90,23 +125,34 @@ export function DriverModeView() {
           etaToDestination: response.route.duration,
           isOffRoute: false,
         })
+        setIsOffRoute(false)
         setIsInitialFetch(false)
+        
+        console.log('[Navigation] Route updated successfully:', {
+          distance: response.route.distance,
+          duration: response.route.duration,
+          pointCount: response.route.geometry.coordinates.length,
+        })
       } else {
         setNavigationError(response.error || 'Failed to fetch route')
+        console.log('[Navigation] Route fetch failed:', response.error)
       }
     } catch (error) {
-      setNavigationError(error instanceof Error ? error.message : 'Network error')
+      const errorMsg = error instanceof Error ? error.message : 'Network error'
+      setNavigationError(errorMsg)
+      console.log('[Navigation] Route fetch error:', errorMsg)
     } finally {
+      isFetchingRef.current = false
       setIsRecalculating(false)
     }
   }, [
     driverLocation,
     destinationCoordinates,
     currentStopId,
-    navigationState.lastRecalculatedAt,
     setIsRecalculating,
     setNavigationRoute,
     setNavigationState,
+    setIsOffRoute,
   ])
 
   // Update driver location in context
@@ -134,27 +180,81 @@ export function DriverModeView() {
   // Fetch initial route when we have driver location and destination
   useEffect(() => {
     if (isInitialFetch && driverLocation && destinationCoordinates && !navigationState.route) {
-      fetchNavigationRoute()
+      fetchNavigationRoute(false) // Not a recalculation
     }
   }, [isInitialFetch, driverLocation, destinationCoordinates, navigationState.route, fetchNavigationRoute])
 
   // Update navigation state based on driver movement
   useEffect(() => {
+    // Skip if no route, no location, or currently recalculating
     if (!navigationState.route || !driverLocation || navigationState.isRecalculating) {
+      return
+    }
+    
+    // Skip if a fetch is in progress
+    if (isFetchingRef.current) {
       return
     }
 
     const currentPos = driverLocation.coordinates
+    const gpsAccuracy = driverLocation.accuracy
+    const now = Date.now()
+    
+    // Check if we're in the grace period after a route update
+    const timeSinceRouteUpdate = now - routeUpdatedAtRef.current
+    const inGracePeriod = timeSinceRouteUpdate < POST_ROUTE_UPDATE_GRACE_PERIOD_MS
+    
+    // Get distance to route for both instruction progression and off-route detection
+    const distanceToRoute = getDistanceToRoute(currentPos, navigationState.route.geometry)
+    const offRouteThreshold = calculateOffRouteThreshold(gpsAccuracy)
+    const currentlyOffRoute = distanceToRoute > offRouteThreshold
 
-    // Check if off route
-    const offRoute = isOffRoute(currentPos, navigationState.route, 50)
-    if (offRoute) {
-      setIsOffRoute(true)
-      fetchNavigationRoute()
-      return
+    // Off-route detection logic (separate from instruction progression)
+    if (!inGracePeriod) {
+      if (currentlyOffRoute) {
+        consecutiveOffRouteCountRef.current += 1
+        
+        console.log('[Navigation] Off-route detected:', {
+          consecutiveCount: consecutiveOffRouteCountRef.current,
+          requiredCount: CONSECUTIVE_OFF_ROUTE_REQUIRED,
+          distanceToRoute: Math.round(distanceToRoute),
+          threshold: Math.round(offRouteThreshold),
+          gpsAccuracy: gpsAccuracy ?? 'unknown',
+        })
+        
+        // Only trigger recalculation after consecutive off-route readings
+        if (consecutiveOffRouteCountRef.current >= CONSECUTIVE_OFF_ROUTE_REQUIRED) {
+          const timeSinceLastRecalc = now - lastRecalculationTimeRef.current
+          
+          if (timeSinceLastRecalc >= RECALCULATION_COOLDOWN_MS) {
+            console.log('[Navigation] Triggering recalculation after persistent off-route')
+            setIsOffRoute(true)
+            fetchNavigationRoute(true) // This is a recalculation
+          } else {
+            console.log('[Navigation] Off-route but cooldown active:', {
+              remainingCooldown: RECALCULATION_COOLDOWN_MS - timeSinceLastRecalc,
+            })
+            // Still show off-route warning but don't recalculate yet
+            setIsOffRoute(true)
+          }
+        }
+      } else {
+        // Driver is on route - reset consecutive count
+        if (consecutiveOffRouteCountRef.current > 0) {
+          console.log('[Navigation] Back on route, resetting consecutive count')
+          consecutiveOffRouteCountRef.current = 0
+        }
+        setIsOffRoute(false)
+      }
+    } else {
+      // In grace period - don't check off-route
+      if (navigationState.isOffRoute) {
+        setIsOffRoute(false)
+      }
+      consecutiveOffRouteCountRef.current = 0
     }
 
-    // Find current step
+    // Instruction progression (always update, independent of off-route status)
     const { stepIndex, distanceToManeuver } = findCurrentStepIndex(
       currentPos,
       navigationState.route.steps,
@@ -165,20 +265,20 @@ export function DriverModeView() {
     const remainingDistance = getRemainingDistance(navigationState.route, stepIndex)
     const remainingDuration = getRemainingDuration(navigationState.route, stepIndex)
 
-    // Update navigation state
+    // Update navigation state (instruction progression)
     setNavigationState({
       currentStepIndex: stepIndex,
       distanceToNextManeuver: distanceToManeuver,
       distanceToDestination: remainingDistance,
       etaToDestination: remainingDuration,
-      isOffRoute: false,
     })
 
     // Check if arrived at destination
     if (destinationCoordinates) {
       const distanceToDestination = calculateDistanceToPoint(currentPos, destinationCoordinates)
       if (distanceToDestination < 30) {
-        // Within 30m of destination - could auto-trigger arrival notification
+        // Within 30m of destination
+        console.log('[Navigation] Near destination:', { distanceToDestination })
       }
     }
   }, [
@@ -186,6 +286,7 @@ export function DriverModeView() {
     navigationState.route,
     navigationState.currentStepIndex,
     navigationState.isRecalculating,
+    navigationState.isOffRoute,
     destinationCoordinates,
     setNavigationState,
     setIsOffRoute,
@@ -195,8 +296,12 @@ export function DriverModeView() {
   // Refetch route when current stop changes
   useEffect(() => {
     if (navigationState.destinationStopId !== currentStopId && driverLocation && destinationCoordinates) {
+      console.log('[Navigation] Stop changed, resetting for new route')
       setIsInitialFetch(true)
       setNavigationRoute(null)
+      consecutiveOffRouteCountRef.current = 0
+      lastRecalculationTimeRef.current = 0 // Allow immediate fetch for new stop
+      routeUpdatedAtRef.current = 0
     }
   }, [currentStopId, navigationState.destinationStopId, driverLocation, destinationCoordinates, setNavigationRoute])
 
@@ -213,8 +318,11 @@ export function DriverModeView() {
   }
 
   const handleRefetchRoute = () => {
+    console.log('[Navigation] Manual refetch requested')
     setIsInitialFetch(true)
-    fetchNavigationRoute()
+    lastRecalculationTimeRef.current = 0 // Allow immediate fetch
+    consecutiveOffRouteCountRef.current = 0
+    fetchNavigationRoute(false)
   }
 
   return (

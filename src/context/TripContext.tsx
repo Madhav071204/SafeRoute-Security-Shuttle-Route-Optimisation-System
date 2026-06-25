@@ -1,10 +1,11 @@
 'use client'
 
-import React, { createContext, useContext, useState, useCallback } from 'react'
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react'
 import { Trip, Stop, Route, ExecutionState, Coordinates, DriverLocation, TrackingMode, ActiveNavigationState, DirectionRoute, RouteOrigin, OriginSource } from '@/types'
 import { MONASH_FALLBACK_ORIGIN } from '@/lib/constants'
 import { generateStopId } from '@/data/demo'
 import { resolveRouteOrigin } from '@/lib/origin'
+import { saveCompletedTrip } from '@/lib/trips'
 
 interface TripContextType {
   trip: Trip
@@ -251,11 +252,21 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       const isComplete = newIndex >= selectedRoute.orderedStopIds.length
 
       if (isComplete) {
-        setTrip((t) => ({ ...t, status: 'completed' }))
-        // Clear navigation when trip is complete
+        setTrip((t) => {
+          const completedTrip = { ...t, status: 'completed' as const }
+          
+          saveCompletedTrip(
+            completedTrip,
+            routes,
+            selectedRouteType,
+            { ...prev, completedStopIds: newCompletedIds },
+            originSource
+          ).catch(err => console.error('Failed to save completed trip:', err))
+          
+          return completedTrip
+        })
         setNavigationStateInternal(createEmptyNavigationState())
       } else {
-        // Reset navigation for the next stop - route will be fetched by the hook
         setNavigationStateInternal((navState) => ({
           ...navState,
           isNavigating: false,
@@ -271,7 +282,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
         currentStopIndex: isComplete ? prev.currentStopIndex : newIndex,
       }
     })
-  }, [routes, selectedRouteType])
+  }, [routes, selectedRouteType, originSource])
 
   const endExecution = useCallback(() => {
     clearTrip()
