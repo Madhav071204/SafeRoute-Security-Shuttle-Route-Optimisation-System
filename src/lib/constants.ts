@@ -1,11 +1,18 @@
-import { Settings, Coordinates } from '@/types'
+import { Settings, Coordinates, RouteOrigin } from '@/types'
 
-// Default origin: Monash University Clayton Campus
-export const DEFAULT_ORIGIN_ADDRESS = 'Monash University, Wellington Rd, Clayton VIC 3800'
-export const DEFAULT_ORIGIN_COORDINATES: Coordinates = {
-  lat: -37.9105,
-  lng: 145.1363,
+// Monash University fallback origin - used only when live location is unavailable
+export const MONASH_FALLBACK_ORIGIN: RouteOrigin = {
+  coordinates: {
+    lat: -37.9105,
+    lng: 145.1363,
+  },
+  label: 'Monash University',
+  source: 'fallback_monash',
 }
+
+// Legacy constants for backward compatibility
+export const DEFAULT_ORIGIN_ADDRESS = MONASH_FALLBACK_ORIGIN.label
+export const DEFAULT_ORIGIN_COORDINATES: Coordinates = MONASH_FALLBACK_ORIGIN.coordinates
 
 // Default settings
 export const DEFAULT_SETTINGS: Settings = {
@@ -14,6 +21,9 @@ export const DEFAULT_SETTINGS: Settings = {
   originAddress: DEFAULT_ORIGIN_ADDRESS,
   originCoordinates: DEFAULT_ORIGIN_COORDINATES,
 }
+
+// Location acquisition timeout (ms)
+export const LOCATION_TIMEOUT_MS = 6000
 
 // Constraints
 export const MAX_STOPS = 15

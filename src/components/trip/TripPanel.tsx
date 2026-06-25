@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card'
 import { StopList } from './StopList'
 import { createDemoStops } from '@/data/demo'
-import { MAX_STOPS, MIN_STOPS_FOR_OPTIMIZATION } from '@/lib/constants'
-import { Coordinates } from '@/types'
+import { MAX_STOPS, MIN_STOPS_FOR_OPTIMIZATION, LOCATION_TIMEOUT_MS } from '@/lib/constants'
+import { getCurrentLocation, resolveRouteOrigin, getOriginStatusMessage } from '@/lib/origin'
+import { Coordinates, RouteOrigin } from '@/types'
 
 export function TripPanel() {
   const {
@@ -16,9 +17,11 @@ export function TripPanel() {
     routes,
     isGeocoding,
     isOptimizing,
+    originSource,
     addStop,
     clearTrip,
     loadDemoData,
+    setTripOrigin,
     setIsGeocoding,
     setGeocodeResults,
     setIsOptimizing,
@@ -29,6 +32,7 @@ export function TripPanel() {
   const [isAcquiringLocation, setIsAcquiringLocation] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
+  const [originStatus, setOriginStatus] = useState<{ message: string; type: 'success' | 'warning' } | null>(null)
 
   const canAddStop = trip.stops.length < MAX_STOPS
   const canGeocode = trip.stops.length > 0 && trip.stops.some((s) => s.address.trim() !== '')
@@ -47,49 +51,19 @@ export function TripPanel() {
     loadDemoData(createDemoStops())
   }
 
-  const acquireLocation = useCallback((): Promise<Coordinates | null> => {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        setLocationError('Geolocation is not supported by your browser')
-        resolve(null)
-        return
-      }
+  const acquireLocation = useCallback(async (): Promise<Coordinates | null> => {
+    setIsAcquiringLocation(true)
+    setLocationError(null)
 
-      setIsAcquiringLocation(true)
-      setLocationError(null)
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setIsAcquiringLocation(false)
-          resolve({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          })
-        },
-        (error) => {
-          setIsAcquiringLocation(false)
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              setLocationError('Location permission denied. Please enable location access.')
-              break
-            case error.POSITION_UNAVAILABLE:
-              setLocationError('Location information is unavailable.')
-              break
-            case error.TIMEOUT:
-              setLocationError('Location request timed out.')
-              break
-            default:
-              setLocationError('Unable to get your location.')
-          }
-          resolve(null)
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        }
-      )
-    })
+    const location = await getCurrentLocation(LOCATION_TIMEOUT_MS)
+    
+    setIsAcquiringLocation(false)
+    
+    if (!location) {
+      setLocationError('Location unavailable — using Monash University as starting point')
+    }
+    
+    return location
   }, [])
 
   const handleStartTrip = useCallback(async () => {
@@ -164,13 +138,28 @@ export function TripPanel() {
     if (geocodedStops.length < MIN_STOPS_FOR_OPTIMIZATION) return
 
     setIsOptimizing(true)
+    setOriginStatus(null)
 
     try {
+      // Step 1: Try to get the user's current location
+      const liveLocation = await getCurrentLocation(LOCATION_TIMEOUT_MS)
+      
+      // Step 2: Resolve the route origin (live location or Monash fallback)
+      const resolvedOrigin = resolveRouteOrigin(liveLocation)
+      
+      // Step 3: Update the trip origin
+      setTripOrigin(resolvedOrigin)
+      
+      // Step 4: Show origin status
+      const status = getOriginStatusMessage(resolvedOrigin)
+      setOriginStatus(status)
+      
+      // Step 5: Run optimization with the resolved origin
       const response = await fetch('/api/optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          origin: trip.origin.coordinates,
+          origin: resolvedOrigin.coordinates,
           stops: geocodedStops.map((s) => ({
             id: s.id,
             coordinates: s.coordinates,
@@ -185,12 +174,13 @@ export function TripPanel() {
       const optimizeData = await response.json()
       const fifoOrder = geocodedStops.map((s) => s.id)
       
+      // Step 6: Get route details for both FIFO and optimized using the same origin
       const [fifoRouteRes, optimizedRouteRes] = await Promise.all([
         fetch('/api/route', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            origin: trip.origin.coordinates,
+            origin: resolvedOrigin.coordinates,
             stops: geocodedStops.map((s) => ({ id: s.id, coordinates: s.coordinates })),
             orderedStopIds: fifoOrder,
           }),
@@ -199,7 +189,7 @@ export function TripPanel() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            origin: trip.origin.coordinates,
+            origin: resolvedOrigin.coordinates,
             stops: geocodedStops.map((s) => ({ id: s.id, coordinates: s.coordinates })),
             orderedStopIds: optimizeData.orderedStopIds,
           }),
@@ -365,8 +355,50 @@ export function TripPanel() {
                     )
                   }
                 >
-                  {isOptimizing ? 'Optimizing Route...' : 'Optimize Route'}
+                  {isOptimizing ? 'Getting location & optimizing...' : 'Optimize Route'}
                 </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Origin status indicator */}
+          <AnimatePresence>
+            {originStatus && hasRoutes && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className={`rounded-lg px-3 py-2 flex items-center gap-2 ${
+                  originStatus.type === 'success'
+                    ? 'bg-success-50 dark:bg-success-900/20 border border-success-200/50 dark:border-success-800/50'
+                    : 'bg-warning-50 dark:bg-warning-900/20 border border-warning-200/50 dark:border-warning-800/50'
+                }`}
+              >
+                <svg
+                  className={`w-4 h-4 flex-shrink-0 ${
+                    originStatus.type === 'success'
+                      ? 'text-success-600 dark:text-success-400'
+                      : 'text-warning-600 dark:text-warning-400'
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  {originStatus.type === 'success' ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  )}
+                </svg>
+                <span
+                  className={`text-xs font-medium ${
+                    originStatus.type === 'success'
+                      ? 'text-success-700 dark:text-success-300'
+                      : 'text-warning-700 dark:text-warning-300'
+                  }`}
+                >
+                  {originStatus.message}
+                </span>
               </motion.div>
             )}
           </AnimatePresence>

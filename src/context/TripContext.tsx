@@ -1,9 +1,10 @@
 'use client'
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import { Trip, Stop, Route, ExecutionState, Coordinates, DriverLocation, TrackingMode, ActiveNavigationState, DirectionRoute } from '@/types'
-import { DEFAULT_ORIGIN_ADDRESS, DEFAULT_ORIGIN_COORDINATES } from '@/lib/constants'
+import { Trip, Stop, Route, ExecutionState, Coordinates, DriverLocation, TrackingMode, ActiveNavigationState, DirectionRoute, RouteOrigin, OriginSource } from '@/types'
+import { MONASH_FALLBACK_ORIGIN } from '@/lib/constants'
 import { generateStopId } from '@/data/demo'
+import { resolveRouteOrigin } from '@/lib/origin'
 
 interface TripContextType {
   trip: Trip
@@ -14,6 +15,7 @@ interface TripContextType {
   isOptimizing: boolean
   isDriverMode: boolean
   navigationState: ActiveNavigationState
+  originSource: OriginSource
   
   // Trip actions
   addStop: () => void
@@ -21,6 +23,9 @@ interface TripContextType {
   updateStop: (id: string, updates: Partial<Stop>) => void
   clearTrip: () => void
   loadDemoData: (stops: Stop[]) => void
+  
+  // Origin management
+  setTripOrigin: (origin: RouteOrigin) => void
   
   // Geocoding
   setGeocodeResults: (results: { id: string; coordinates: Coordinates | null; error?: string }[]) => void
@@ -55,8 +60,8 @@ function createEmptyTrip(): Trip {
   return {
     id: `trip_${Date.now()}`,
     origin: {
-      address: DEFAULT_ORIGIN_ADDRESS,
-      coordinates: DEFAULT_ORIGIN_COORDINATES,
+      address: MONASH_FALLBACK_ORIGIN.label,
+      coordinates: MONASH_FALLBACK_ORIGIN.coordinates,
     },
     stops: [],
     status: 'input',
@@ -101,6 +106,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
   const [navigationState, setNavigationStateInternal] = useState<ActiveNavigationState>(createEmptyNavigationState)
   const [isGeocoding, setIsGeocoding] = useState(false)
   const [isOptimizing, setIsOptimizing] = useState(false)
+  const [originSource, setOriginSource] = useState<OriginSource>('fallback_monash')
 
   const addStop = useCallback(() => {
     setTrip((prev) => ({
@@ -140,6 +146,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     setRoutesState({ fifo: null, optimized: null })
     setExecutionState(createEmptyExecutionState())
     setNavigationStateInternal(createEmptyNavigationState())
+    setOriginSource('fallback_monash')
   }, [])
 
   const loadDemoData = useCallback((stops: Stop[]) => {
@@ -148,6 +155,19 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       stops,
       status: 'input',
     }))
+    setRoutesState({ fifo: null, optimized: null })
+  }, [])
+
+  const setTripOrigin = useCallback((origin: RouteOrigin) => {
+    setTrip((prev) => ({
+      ...prev,
+      origin: {
+        address: origin.label,
+        coordinates: origin.coordinates,
+      },
+    }))
+    setOriginSource(origin.source)
+    // Reset routes when origin changes
     setRoutesState({ fifo: null, optimized: null })
   }, [])
 
@@ -328,11 +348,13 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
         isOptimizing,
         isDriverMode,
         navigationState,
+        originSource,
         addStop,
         removeStop,
         updateStop,
         clearTrip,
         loadDemoData,
+        setTripOrigin,
         setGeocodeResults,
         setIsGeocoding,
         setRoutes,

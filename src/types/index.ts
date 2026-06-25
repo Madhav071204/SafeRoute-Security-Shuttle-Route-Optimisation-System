@@ -5,6 +5,15 @@ export interface Coordinates {
   lng: number
 }
 
+// Origin types for smart starting location
+export type OriginSource = 'live_location' | 'fallback_monash'
+
+export interface RouteOrigin {
+  coordinates: Coordinates
+  label: string
+  source: OriginSource
+}
+
 export interface Stop {
   id: string
   passengerName: string

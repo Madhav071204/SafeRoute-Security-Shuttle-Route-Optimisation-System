@@ -8,7 +8,7 @@ import { MetricsCard } from './MetricsCard'
 import { AnimatedCounter } from '@/components/ui/AnimatedCounter'
 
 export function RouteComparison() {
-  const { routes, selectedRouteType, setSelectedRouteType } = useTrip()
+  const { routes, selectedRouteType, setSelectedRouteType, trip, originSource } = useTrip()
   const { calculateFuelCost } = useSettings()
 
   if (!routes.fifo || !routes.optimized) {
@@ -202,6 +202,44 @@ export function RouteComparison() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Origin info */}
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+            originSource === 'live_location'
+              ? 'bg-success-50 dark:bg-success-900/20'
+              : 'bg-surface-100 dark:bg-surface-800'
+          }`}>
+            <svg
+              className={`w-4 h-4 flex-shrink-0 ${
+                originSource === 'live_location'
+                  ? 'text-success-600 dark:text-success-400'
+                  : 'text-surface-500 dark:text-surface-400'
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <div>
+              <span className={`text-xs font-medium ${
+                originSource === 'live_location'
+                  ? 'text-success-700 dark:text-success-300'
+                  : 'text-surface-600 dark:text-surface-400'
+              }`}>
+                Origin:{' '}
+              </span>
+              <span className={`text-xs ${
+                originSource === 'live_location'
+                  ? 'text-success-600 dark:text-success-400'
+                  : 'text-surface-500 dark:text-surface-500'
+              }`}>
+                {trip.origin.address}
+                {originSource === 'fallback_monash' && ' (fallback)'}
+              </span>
+            </div>
+          </div>
 
           <p className="text-xs text-surface-500 dark:text-surface-400 flex items-start gap-2">
             <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
