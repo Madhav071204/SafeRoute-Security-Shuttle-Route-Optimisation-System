@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { useTrip } from '@/context/TripContext'
-import { useSettings } from '@/hooks/useSettings'
+ import { useSettings } from '@/hooks/useSettings'
 import { Button } from '@/components/ui/Button'
 import { AnimatedCounter } from '@/components/ui/AnimatedCounter'
 import { DriverModeView } from './DriverModeView'

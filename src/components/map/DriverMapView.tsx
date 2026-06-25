@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { useTrip } from '@/context/TripContext'
-import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '@/lib/constants'
-import { DriverLocation, TrackingMode } from '@/types'
+import { DEFAULT_MAP_CENTER } from '@/lib/constants'
+import { DriverLocation, TrackingMode, DirectionRoute, Coordinates } from '@/types'
+import clsx from 'clsx'
 
 interface DriverMapViewProps {
   driverLocation: DriverLocation | null
@@ -11,6 +13,8 @@ interface DriverMapViewProps {
   onTrackingModeChange: (mode: TrackingMode) => void
   currentStopIndex: number
   completedStopIds: string[]
+  navigationRoute?: DirectionRoute | null
+  currentDestination?: Coordinates | null
 }
 
 export function DriverMapView({
@@ -19,6 +23,8 @@ export function DriverMapView({
   onTrackingModeChange,
   currentStopIndex,
   completedStopIds,
+  navigationRoute,
+  currentDestination,
 }: DriverMapViewProps) {
   const { trip, routes, selectedRouteType } = useTrip()
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -27,11 +33,11 @@ export function DriverMapView({
   const driverMarkerRef = useRef<mapboxgl.Marker | null>(null)
   const [mapError, setMapError] = useState<string | null>(null)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
+  const userInteractedRef = useRef(false)
 
   const selectedRoute = selectedRouteType === 'fifo' ? routes.fifo : routes.optimized
   const orderedStopIds = selectedRoute?.orderedStopIds || []
 
-  // Initialize map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
 
@@ -56,9 +62,11 @@ export function DriverMapView({
           style: 'mapbox://styles/mapbox/streets-v12',
           center: initialCenter as [number, number],
           zoom: 15,
+          attributionControl: false,
         })
 
-        map.addControl(new mapboxgl.NavigationControl(), 'top-right')
+        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right')
+        map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right')
 
         map.on('load', () => {
           setIsMapLoaded(true)
@@ -88,7 +96,6 @@ export function DriverMapView({
     }
   }, [])
 
-  // Update driver marker
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return
 
@@ -101,37 +108,63 @@ export function DriverMapView({
       }
 
       if (driverLocation) {
+        const hasHeading = driverLocation.heading !== null && !isNaN(driverLocation.heading)
+        
         const el = document.createElement('div')
-        el.className = 'driver-marker'
-        el.innerHTML = `
-          <div style="
-            width: 24px;
-            height: 24px;
-            background-color: #3b82f6;
-            border-radius: 50%;
-            border: 3px solid white;
-            box-shadow: 0 0 0 2px #3b82f6, 0 2px 8px rgba(0,0,0,0.3);
-            position: relative;
-          ">
-            <div style="
-              position: absolute;
-              inset: 3px;
-              background-color: #60a5fa;
-              border-radius: 50%;
-              animation: pulse 2s infinite;
-            "></div>
-          </div>
-        `
+        el.className = 'driver-location-marker'
+        
+        if (hasHeading) {
+          // Navigation arrow when heading is available
+          el.innerHTML = `
+            <div class="driver-marker-nav" style="transform: rotate(${driverLocation.heading}deg);">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="16" r="14" fill="#3b82f6" stroke="white" stroke-width="3"/>
+                <path d="M16 8L20 18H12L16 8Z" fill="white"/>
+              </svg>
+            </div>
+          `
+        } else {
+          // Standard dot marker
+          el.innerHTML = `
+            <div class="driver-marker-outer">
+              <div class="driver-marker-inner"></div>
+            </div>
+          `
+        }
 
         const style = document.createElement('style')
         style.textContent = `
-          @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(0.8); }
+          .driver-marker-outer {
+            width: 22px;
+            height: 22px;
+            background-color: #3b82f6;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25), 0 0 0 2px rgba(59,130,246,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: driverPulse 2s ease-in-out infinite;
+          }
+          .driver-marker-inner {
+            width: 8px;
+            height: 8px;
+            background-color: #93c5fd;
+            border-radius: 50%;
+          }
+          .driver-marker-nav {
+            width: 32px;
+            height: 32px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+            transition: transform 0.3s ease-out;
+          }
+          @keyframes driverPulse {
+            0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.25), 0 0 0 2px rgba(59,130,246,0.3); }
+            50% { box-shadow: 0 2px 8px rgba(0,0,0,0.25), 0 0 0 6px rgba(59,130,246,0.15); }
           }
         `
-        if (!document.querySelector('style[data-driver-pulse]')) {
-          style.setAttribute('data-driver-pulse', 'true')
+        if (!document.querySelector('style[data-driver-marker]')) {
+          style.setAttribute('data-driver-marker', 'true')
           document.head.appendChild(style)
         }
 
@@ -141,11 +174,27 @@ export function DriverMapView({
 
         driverMarkerRef.current = marker
 
-        if (trackingMode === 'follow') {
-          mapRef.current!.easeTo({
+        // Navigation follow mode with bearing
+        if (trackingMode === 'follow' && !userInteractedRef.current) {
+          const options: {
+            center: [number, number]
+            zoom: number
+            duration: number
+            bearing?: number
+            pitch?: number
+          } = {
             center: [driverLocation.coordinates.lng, driverLocation.coordinates.lat],
+            zoom: 16,
             duration: 500,
-          })
+          }
+          
+          // Add bearing for navigation-like experience if heading is available
+          if (hasHeading) {
+            options.bearing = driverLocation.heading!
+            options.pitch = 45
+          }
+          
+          mapRef.current!.easeTo(options)
         }
       }
     }
@@ -153,7 +202,6 @@ export function DriverMapView({
     updateDriverMarker()
   }, [driverLocation, isMapLoaded, trackingMode])
 
-  // Update stop markers with execution state
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return
 
@@ -163,9 +211,30 @@ export function DriverMapView({
       markersRef.current.forEach((marker) => marker.remove())
       markersRef.current = []
 
-      const originMarker = new mapboxgl.Marker({ color: '#16a34a' })
+      const createOriginMarker = () => {
+        const el = document.createElement('div')
+        el.innerHTML = `
+          <div style="
+            width: 26px;
+            height: 26px;
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            border-radius: 50%;
+            border: 2.5px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+              <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+            </svg>
+          </div>
+        `
+        return el
+      }
+
+      const originMarker = new mapboxgl.Marker({ element: createOriginMarker() })
         .setLngLat([trip.origin.coordinates.lng, trip.origin.coordinates.lat])
-        .setPopup(new mapboxgl.Popup().setText('Origin: ' + trip.origin.address))
         .addTo(mapRef.current!)
       markersRef.current.push(originMarker)
 
@@ -177,82 +246,84 @@ export function DriverMapView({
         const isCurrent = orderIndex === currentStopIndex
 
         const el = document.createElement('div')
-        el.className = 'stop-marker'
+        el.className = 'stop-marker-element'
 
         if (isCompleted) {
-          el.style.cssText = `
-            width: 20px;
-            height: 20px;
-            background-color: #9ca3af;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 10px;
-            border: 2px solid white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            opacity: 0.7;
-          `
           el.innerHTML = `
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-              <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <div style="
+              width: 22px;
+              height: 22px;
+              background-color: #9ca3af;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              border: 2px solid white;
+              box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+              opacity: 0.75;
+            ">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
           `
         } else if (isCurrent) {
-          el.style.cssText = `
-            width: 36px;
-            height: 36px;
-            background-color: #2563eb;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 14px;
-            font-weight: bold;
-            border: 3px solid white;
-            box-shadow: 0 0 0 3px #2563eb, 0 4px 12px rgba(37,99,235,0.4);
-            animation: currentPulse 2s infinite;
+          el.innerHTML = `
+            <div style="
+              width: 34px;
+              height: 34px;
+              background: linear-gradient(135deg, #3b82f6, #2563eb);
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              font-size: 14px;
+              font-weight: 700;
+              border: 3px solid white;
+              box-shadow: 0 0 0 3px rgba(59,130,246,0.3), 0 4px 12px rgba(37,99,235,0.35);
+            " class="marker-pulse">
+              ${displayNumber}
+            </div>
           `
-          el.textContent = String(displayNumber)
 
           const style = document.createElement('style')
           style.textContent = `
-            @keyframes currentPulse {
-              0%, 100% { box-shadow: 0 0 0 3px #2563eb, 0 4px 12px rgba(37,99,235,0.4); }
-              50% { box-shadow: 0 0 0 6px rgba(37,99,235,0.3), 0 4px 12px rgba(37,99,235,0.4); }
+            @keyframes currentMarkerPulse {
+              0%, 100% { box-shadow: 0 0 0 3px rgba(59,130,246,0.3), 0 4px 12px rgba(37,99,235,0.35); }
+              50% { box-shadow: 0 0 0 8px rgba(59,130,246,0.15), 0 4px 12px rgba(37,99,235,0.35); }
+            }
+            .marker-pulse {
+              animation: currentMarkerPulse 2s ease-in-out infinite;
             }
           `
-          if (!document.querySelector('style[data-current-pulse]')) {
-            style.setAttribute('data-current-pulse', 'true')
+          if (!document.querySelector('style[data-current-marker]')) {
+            style.setAttribute('data-current-marker', 'true')
             document.head.appendChild(style)
           }
         } else {
-          el.style.cssText = `
-            width: 28px;
-            height: 28px;
-            background-color: #6b7280;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 12px;
-            font-weight: bold;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          el.innerHTML = `
+            <div style="
+              width: 26px;
+              height: 26px;
+              background-color: #64748b;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              font-size: 11px;
+              font-weight: 600;
+              border: 2px solid white;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            ">
+              ${displayNumber}
+            </div>
           `
-          el.textContent = String(displayNumber)
         }
 
         const marker = new mapboxgl.Marker({ element: el })
           .setLngLat([stop.coordinates!.lng, stop.coordinates!.lat])
-          .setPopup(
-            new mapboxgl.Popup().setHTML(
-              `<strong>${stop.passengerName || 'Stop ' + displayNumber}</strong><br/>${stop.address}${isCompleted ? '<br/><span style="color: #16a34a;">✓ Completed</span>' : ''}`
-            )
-          )
           .addTo(mapRef.current!)
         markersRef.current.push(marker)
       })
@@ -261,12 +332,47 @@ export function DriverMapView({
     updateMarkers()
   }, [trip.stops, trip.origin, orderedStopIds, completedStopIds, currentStopIndex, isMapLoaded])
 
-  // Update route polyline
+  // Handle map interaction to exit follow mode
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return
 
     const map = mapRef.current
 
+    const handleUserInteraction = () => {
+      if (trackingMode === 'follow') {
+        userInteractedRef.current = true
+        onTrackingModeChange('overview')
+      }
+    }
+
+    map.on('dragstart', handleUserInteraction)
+    map.on('zoomstart', (e: unknown) => {
+      // Only trigger if user initiated the zoom (not programmatic)
+      const event = e as { originalEvent?: unknown }
+      if (event.originalEvent) {
+        handleUserInteraction()
+      }
+    })
+
+    return () => {
+      map.off('dragstart', handleUserInteraction)
+      map.off('zoomstart', handleUserInteraction)
+    }
+  }, [isMapLoaded, trackingMode, onTrackingModeChange])
+
+  // Render navigation route (priority) or fallback to selected route polyline
+  useEffect(() => {
+    if (!mapRef.current || !isMapLoaded) return
+
+    const map = mapRef.current
+
+    // Remove existing layers
+    if (map.getLayer('navigation-route')) {
+      map.removeLayer('navigation-route')
+    }
+    if (map.getSource('navigation-route')) {
+      map.removeSource('navigation-route')
+    }
     if (map.getLayer('route')) {
       map.removeLayer('route')
     }
@@ -274,7 +380,34 @@ export function DriverMapView({
       map.removeSource('route')
     }
 
-    if (selectedRoute?.polyline) {
+    // Prefer navigation route if available (real-time directions from current location)
+    if (navigationRoute?.geometry) {
+      map.addSource('navigation-route', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: navigationRoute.geometry,
+        },
+      })
+
+      // Add a wider background line for better visibility
+      map.addLayer({
+        id: 'navigation-route',
+        type: 'line',
+        source: 'navigation-route',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': '#3b82f6',
+          'line-width': 6,
+          'line-opacity': 0.85,
+        },
+      })
+    } else if (selectedRoute?.polyline) {
+      // Fallback to encoded polyline from original route
       const decodePolyline = (encoded: string): [number, number][] => {
         const points: [number, number][] = []
         let index = 0
@@ -336,15 +469,14 @@ export function DriverMapView({
           'line-cap': 'round',
         },
         paint: {
-          'line-color': '#2563eb',
+          'line-color': '#94a3b8',
           'line-width': 4,
-          'line-opacity': 0.8,
+          'line-opacity': 0.6,
         },
       })
     }
-  }, [selectedRoute, isMapLoaded])
+  }, [navigationRoute, selectedRoute, isMapLoaded])
 
-  // Handle tracking mode changes
   const handleFitBounds = useCallback(async () => {
     if (!mapRef.current || !isMapLoaded) return
 
@@ -368,15 +500,38 @@ export function DriverMapView({
   const handleRecenter = useCallback(() => {
     if (!mapRef.current || !driverLocation) return
 
-    mapRef.current.easeTo({
+    userInteractedRef.current = false
+    
+    const hasHeading = driverLocation.heading !== null && !isNaN(driverLocation.heading)
+    
+    const options: {
+      center: [number, number]
+      zoom: number
+      duration: number
+      bearing?: number
+      pitch?: number
+    } = {
       center: [driverLocation.coordinates.lng, driverLocation.coordinates.lat],
-      zoom: 15,
+      zoom: 16,
       duration: 500,
-    })
+    }
+    
+    if (hasHeading) {
+      options.bearing = driverLocation.heading!
+      options.pitch = 45
+    } else {
+      options.bearing = 0
+      options.pitch = 0
+    }
+    
+    mapRef.current.easeTo(options)
     onTrackingModeChange('follow')
   }, [driverLocation, onTrackingModeChange])
 
   const handleShowOverview = useCallback(() => {
+    if (mapRef.current) {
+      mapRef.current.easeTo({ bearing: 0, pitch: 0, duration: 300 })
+    }
     handleFitBounds()
     onTrackingModeChange('overview')
   }, [handleFitBounds, onTrackingModeChange])
@@ -391,16 +546,21 @@ export function DriverMapView({
 
   if (mapError) {
     return (
-      <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-        <div className="text-center p-4">
-          <p className="text-red-600 font-medium">{mapError}</p>
-          <p className="text-gray-500 text-sm mt-2">
+      <div className="absolute inset-0 bg-surface-100 dark:bg-surface-900 flex items-center justify-center">
+        <div className="text-center p-6 max-w-sm">
+          <div className="w-12 h-12 rounded-xl bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-danger-600 dark:text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <p className="text-danger-600 dark:text-danger-400 font-medium mb-2">{mapError}</p>
+          <p className="text-surface-500 dark:text-surface-400 text-sm">
             Get a free API key at{' '}
             <a
               href="https://account.mapbox.com/access-tokens/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 underline"
+              className="text-primary-600 dark:text-primary-400 underline hover:no-underline"
             >
               mapbox.com
             </a>
@@ -417,40 +577,46 @@ export function DriverMapView({
         className="absolute inset-0"
       />
 
-      {/* Map controls overlay */}
-      <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
-        <button
+      {/* Glass-style map controls */}
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.2 }}
+        className="absolute top-3 left-3 flex flex-col gap-2 z-10"
+      >
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={handleRecenter}
           disabled={!driverLocation}
-          className={`
-            px-3 py-2 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2
-            ${trackingMode === 'follow' 
-              ? 'bg-blue-600 text-white' 
-              : 'bg-white text-gray-700 hover:bg-gray-50'}
-            ${!driverLocation ? 'opacity-50 cursor-not-allowed' : ''}
-          `}
+          className={clsx(
+            'glass-button flex items-center gap-2',
+            trackingMode === 'follow' && 'active',
+            !driverLocation && 'opacity-50 cursor-not-allowed'
+          )}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          Follow Me
-        </button>
-        <button
+          <span className="hidden sm:inline">Follow Me</span>
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={handleShowOverview}
-          className={`
-            px-3 py-2 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2
-            ${trackingMode === 'overview' 
-              ? 'bg-blue-600 text-white' 
-              : 'bg-white text-gray-700 hover:bg-gray-50'}
-          `}
+          className={clsx(
+            'glass-button flex items-center gap-2',
+            trackingMode === 'overview' && 'active'
+          )}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
           </svg>
-          Full Route
-        </button>
-      </div>
+          <span className="hidden sm:inline">Full Route</span>
+        </motion.button>
+      </motion.div>
     </div>
   )
 }

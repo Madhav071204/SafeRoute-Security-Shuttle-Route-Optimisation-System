@@ -3,8 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { TripProvider } from '@/context/TripContext'
 import { ThemeProvider } from '@/context/ThemeContext'
-import { Navbar } from '@/components/layout/Navbar'
-import { Footer } from '@/components/layout/Footer'
+import { AppLayout } from '@/components/layout/AppLayout'
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -44,13 +43,9 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans`}>
         <ThemeProvider>
           <TripProvider>
-            <div className="min-h-screen flex flex-col">
-              <Navbar />
-              <main className="flex-1">
-                {children}
-              </main>
-              <Footer />
-            </div>
+            <AppLayout>
+              {children}
+            </AppLayout>
           </TripProvider>
         </ThemeProvider>
       </body>

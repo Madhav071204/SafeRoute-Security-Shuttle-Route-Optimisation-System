@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import { Trip, Stop, Route, ExecutionState, Coordinates, DriverLocation, TrackingMode } from '@/types'
+import { Trip, Stop, Route, ExecutionState, Coordinates, DriverLocation, TrackingMode, ActiveNavigationState, DirectionRoute } from '@/types'
 import { DEFAULT_ORIGIN_ADDRESS, DEFAULT_ORIGIN_COORDINATES } from '@/lib/constants'
 import { generateStopId } from '@/data/demo'
 
@@ -12,6 +12,8 @@ interface TripContextType {
   executionState: ExecutionState
   isGeocoding: boolean
   isOptimizing: boolean
+  isDriverMode: boolean
+  navigationState: ActiveNavigationState
   
   // Trip actions
   addStop: () => void
@@ -30,7 +32,7 @@ interface TripContextType {
   setIsOptimizing: (value: boolean) => void
   
   // Execution
-  startExecution: () => void
+  startExecution: (liveOrigin?: Coordinates) => void
   markStopComplete: () => void
   endExecution: () => void
   
@@ -38,6 +40,13 @@ interface TripContextType {
   setDriverLocation: (location: DriverLocation | null) => void
   setTrackingMode: (mode: TrackingMode) => void
   setLocationPermission: (granted: boolean | null) => void
+  
+  // Navigation
+  setNavigationState: (state: Partial<ActiveNavigationState>) => void
+  setNavigationRoute: (route: DirectionRoute | null) => void
+  updateNavigationStep: (stepIndex: number, distanceToManeuver: number | null) => void
+  setIsRecalculating: (value: boolean) => void
+  setIsOffRoute: (value: boolean) => void
 }
 
 const TripContext = createContext<TripContextType | undefined>(undefined)
@@ -65,6 +74,22 @@ function createEmptyExecutionState(): ExecutionState {
   }
 }
 
+function createEmptyNavigationState(): ActiveNavigationState {
+  return {
+    isNavigating: false,
+    currentStepIndex: 0,
+    currentLegIndex: 0,
+    route: null,
+    destinationStopId: null,
+    distanceToNextManeuver: null,
+    distanceToDestination: null,
+    etaToDestination: null,
+    isRecalculating: false,
+    isOffRoute: false,
+    lastRecalculatedAt: null,
+  }
+}
+
 export function TripProvider({ children }: { children: React.ReactNode }) {
   const [trip, setTrip] = useState<Trip>(createEmptyTrip)
   const [routes, setRoutesState] = useState<{ fifo: Route | null; optimized: Route | null }>({
@@ -73,6 +98,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
   })
   const [selectedRouteType, setSelectedRouteType] = useState<'fifo' | 'optimized'>('optimized')
   const [executionState, setExecutionState] = useState<ExecutionState>(createEmptyExecutionState)
+  const [navigationState, setNavigationStateInternal] = useState<ActiveNavigationState>(createEmptyNavigationState)
   const [isGeocoding, setIsGeocoding] = useState(false)
   const [isOptimizing, setIsOptimizing] = useState(false)
 
@@ -113,6 +139,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     setTrip(createEmptyTrip())
     setRoutesState({ fifo: null, optimized: null })
     setExecutionState(createEmptyExecutionState())
+    setNavigationStateInternal(createEmptyNavigationState())
   }, [])
 
   const loadDemoData = useCallback((stops: Stop[]) => {
@@ -162,11 +189,24 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const startExecution = useCallback(() => {
+  const startExecution = useCallback((liveOrigin?: Coordinates) => {
     const selectedRoute = selectedRouteType === 'fifo' ? routes.fifo : routes.optimized
     if (!selectedRoute) return
 
-    setTrip((prev) => ({ ...prev, status: 'executing' }))
+    // If live origin provided, update the trip origin to use the driver's current location
+    if (liveOrigin) {
+      setTrip((prev) => ({
+        ...prev,
+        status: 'executing',
+        origin: {
+          address: 'Current Location',
+          coordinates: liveOrigin,
+        },
+      }))
+    } else {
+      setTrip((prev) => ({ ...prev, status: 'executing' }))
+    }
+    
     setExecutionState({
       currentStopIndex: 0,
       completedStopIds: [],
@@ -175,6 +215,9 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       trackingMode: 'follow',
       hasLocationPermission: null,
     })
+    
+    // Reset navigation state for new execution
+    setNavigationStateInternal(createEmptyNavigationState())
   }, [routes, selectedRouteType])
 
   const markStopComplete = useCallback(() => {
@@ -189,6 +232,17 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
 
       if (isComplete) {
         setTrip((t) => ({ ...t, status: 'completed' }))
+        // Clear navigation when trip is complete
+        setNavigationStateInternal(createEmptyNavigationState())
+      } else {
+        // Reset navigation for the next stop - route will be fetched by the hook
+        setNavigationStateInternal((navState) => ({
+          ...navState,
+          isNavigating: false,
+          route: null,
+          currentStepIndex: 0,
+          destinationStopId: null,
+        }))
       }
 
       return {
@@ -224,6 +278,45 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     }))
   }, [])
 
+  // Navigation state management
+  const setNavigationState = useCallback((state: Partial<ActiveNavigationState>) => {
+    setNavigationStateInternal((prev) => ({ ...prev, ...state }))
+  }, [])
+
+  const setNavigationRoute = useCallback((route: DirectionRoute | null) => {
+    setNavigationStateInternal((prev) => ({
+      ...prev,
+      route,
+      isNavigating: route !== null,
+      currentStepIndex: 0,
+      lastRecalculatedAt: route ? Date.now() : prev.lastRecalculatedAt,
+    }))
+  }, [])
+
+  const updateNavigationStep = useCallback((stepIndex: number, distanceToManeuver: number | null) => {
+    setNavigationStateInternal((prev) => ({
+      ...prev,
+      currentStepIndex: stepIndex,
+      distanceToNextManeuver: distanceToManeuver,
+    }))
+  }, [])
+
+  const setIsRecalculating = useCallback((value: boolean) => {
+    setNavigationStateInternal((prev) => ({
+      ...prev,
+      isRecalculating: value,
+    }))
+  }, [])
+
+  const setIsOffRoute = useCallback((value: boolean) => {
+    setNavigationStateInternal((prev) => ({
+      ...prev,
+      isOffRoute: value,
+    }))
+  }, [])
+
+  const isDriverMode = trip.status === 'executing'
+
   return (
     <TripContext.Provider
       value={{
@@ -233,6 +326,8 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
         executionState,
         isGeocoding,
         isOptimizing,
+        isDriverMode,
+        navigationState,
         addStop,
         removeStop,
         updateStop,
@@ -249,6 +344,11 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
         setDriverLocation,
         setTrackingMode,
         setLocationPermission,
+        setNavigationState,
+        setNavigationRoute,
+        updateNavigationStep,
+        setIsRecalculating,
+        setIsOffRoute,
       }}
     >
       {children}

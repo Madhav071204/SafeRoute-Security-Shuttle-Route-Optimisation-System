@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTrip } from '@/context/TripContext'
 import { Button } from '@/components/ui/Button'
@@ -7,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { StopList } from './StopList'
 import { createDemoStops } from '@/data/demo'
 import { MAX_STOPS, MIN_STOPS_FOR_OPTIMIZATION } from '@/lib/constants'
+import { Coordinates } from '@/types'
 
 export function TripPanel() {
   const {
@@ -24,6 +26,10 @@ export function TripPanel() {
     startExecution,
   } = useTrip()
 
+  const [isAcquiringLocation, setIsAcquiringLocation] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false)
+
   const canAddStop = trip.stops.length < MAX_STOPS
   const canGeocode = trip.stops.length > 0 && trip.stops.some((s) => s.address.trim() !== '')
   const canOptimize =
@@ -40,6 +46,77 @@ export function TripPanel() {
   const handleLoadDemo = () => {
     loadDemoData(createDemoStops())
   }
+
+  const acquireLocation = useCallback((): Promise<Coordinates | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        setLocationError('Geolocation is not supported by your browser')
+        resolve(null)
+        return
+      }
+
+      setIsAcquiringLocation(true)
+      setLocationError(null)
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setIsAcquiringLocation(false)
+          resolve({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          })
+        },
+        (error) => {
+          setIsAcquiringLocation(false)
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              setLocationError('Location permission denied. Please enable location access.')
+              break
+            case error.POSITION_UNAVAILABLE:
+              setLocationError('Location information is unavailable.')
+              break
+            case error.TIMEOUT:
+              setLocationError('Location request timed out.')
+              break
+            default:
+              setLocationError('Unable to get your location.')
+          }
+          resolve(null)
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      )
+    })
+  }, [])
+
+  const handleStartTrip = useCallback(async () => {
+    setShowLocationPrompt(false)
+    
+    const location = await acquireLocation()
+    
+    if (location) {
+      // Start execution with the live location as origin
+      startExecution(location)
+    } else {
+      // Show error but allow retry
+      setShowLocationPrompt(true)
+    }
+  }, [acquireLocation, startExecution])
+
+  const handleStartWithoutLocation = useCallback(() => {
+    setShowLocationPrompt(false)
+    setLocationError(null)
+    // Start with the default/preset origin
+    startExecution()
+  }, [startExecution])
+
+  const handleShowLocationPrompt = useCallback(() => {
+    setShowLocationPrompt(true)
+    setLocationError(null)
+  }, [])
 
   const handleGeocode = async () => {
     const stopsToGeocode = trip.stops.filter((s) => s.address.trim() !== '')
@@ -295,7 +372,7 @@ export function TripPanel() {
           </AnimatePresence>
 
           <AnimatePresence mode="wait">
-            {hasRoutes && (
+            {hasRoutes && !showLocationPrompt && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -303,7 +380,7 @@ export function TripPanel() {
               >
                 <Button
                   variant="success"
-                  onClick={startExecution}
+                  onClick={handleShowLocationPrompt}
                   disabled={isDisabled}
                   fullWidth
                   size="lg"
@@ -315,6 +392,86 @@ export function TripPanel() {
                   }
                 >
                   Start Trip
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Location acquisition prompt */}
+          <AnimatePresence mode="wait">
+            {hasRoutes && showLocationPrompt && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-3"
+              >
+                <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200/50 dark:border-primary-800/50 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary-100 dark:bg-primary-800/50 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-primary-900 dark:text-primary-100">
+                        Use your current location?
+                      </h4>
+                      <p className="text-xs text-primary-700 dark:text-primary-300 mt-1">
+                        The route will start from your van's current position for accurate navigation.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Location error */}
+                  {locationError && (
+                    <div className="mt-3 bg-warning-100 dark:bg-warning-900/30 rounded-lg px-3 py-2">
+                      <p className="text-xs text-warning-700 dark:text-warning-300 flex items-center gap-1.5">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        {locationError}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleStartTrip}
+                      disabled={isAcquiringLocation}
+                      isLoading={isAcquiringLocation}
+                      leftIcon={
+                        !isAcquiringLocation && (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                        )
+                      }
+                    >
+                      {isAcquiringLocation ? 'Getting...' : 'Use Location'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleStartWithoutLocation}
+                      disabled={isAcquiringLocation}
+                    >
+                      Skip
+                    </Button>
+                  </div>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowLocationPrompt(false)}
+                  fullWidth
+                >
+                  Cancel
                 </Button>
               </motion.div>
             )}

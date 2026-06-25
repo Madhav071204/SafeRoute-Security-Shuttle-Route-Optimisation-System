@@ -110,3 +110,62 @@ export interface RouteResponse {
   totalDistanceKm: number
   totalDurationMinutes: number
 }
+
+// Navigation types for turn-by-turn directions
+export interface NavigationStep {
+  instruction: string
+  maneuverType: string
+  modifier?: string
+  distance: number // meters
+  duration: number // seconds
+  location: Coordinates
+  roadName?: string
+}
+
+export interface DirectionRoute {
+  geometry: GeoJSON.LineString
+  distance: number // meters
+  duration: number // seconds
+  legs: DirectionLeg[]
+  steps: NavigationStep[]
+}
+
+export interface DirectionLeg {
+  distance: number // meters
+  duration: number // seconds
+  steps: NavigationStep[]
+}
+
+export interface DirectionsRequest {
+  origin: Coordinates
+  destination: Coordinates
+  waypoints?: Coordinates[]
+}
+
+export interface DirectionsResponse {
+  success: boolean
+  route?: DirectionRoute
+  error?: string
+}
+
+export type StopStatus = 'pending' | 'current' | 'completed' | 'skipped'
+
+export interface ActiveNavigationState {
+  isNavigating: boolean
+  currentStepIndex: number
+  currentLegIndex: number
+  route: DirectionRoute | null
+  destinationStopId: string | null
+  distanceToNextManeuver: number | null // meters
+  distanceToDestination: number | null // meters
+  etaToDestination: number | null // seconds
+  isRecalculating: boolean
+  isOffRoute: boolean
+  lastRecalculatedAt: number | null
+}
+
+export interface NavigationConfig {
+  maneuverThresholdMeters: number // Distance to advance to next instruction
+  offRouteThresholdMeters: number // Distance to trigger recalculation
+  recalculationCooldownMs: number // Min time between recalculations
+}
