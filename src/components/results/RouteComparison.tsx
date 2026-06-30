@@ -28,7 +28,7 @@ export function RouteComparison() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-12">
+          <div className="text-center py-8">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center">
               <svg className="w-8 h-8 text-surface-400 dark:text-surface-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -36,7 +36,7 @@ export function RouteComparison() {
             </div>
             <p className="text-surface-600 dark:text-surface-400 font-medium">No routes calculated yet</p>
             <p className="text-surface-500 dark:text-surface-500 text-sm mt-1">
-              Add stops and click &quot;Optimize Route&quot; to see comparison
+              Add stops, then click &quot;Optimize Route&quot; in the Trip Planner.
             </p>
           </div>
         </CardContent>
@@ -142,7 +142,7 @@ export function RouteComparison() {
                       Estimated Savings with Optimized Route
                     </h4>
                   </div>
-                  <div className="grid grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}

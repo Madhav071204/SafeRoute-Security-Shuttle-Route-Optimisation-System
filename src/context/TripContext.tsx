@@ -24,6 +24,7 @@ interface TripContextType {
   updateStop: (id: string, updates: Partial<Stop>) => void
   clearTrip: () => void
   loadDemoData: (stops: Stop[]) => void
+  loadTrip: (trip: Trip, routes?: { fifo: Route | null; optimized: Route | null }, selectedRouteType?: 'fifo' | 'optimized') => void
   
   // Origin management
   setTripOrigin: (origin: RouteOrigin) => void
@@ -157,6 +158,21 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       status: 'input',
     }))
     setRoutesState({ fifo: null, optimized: null })
+  }, [])
+
+  const loadTrip = useCallback((
+    nextTrip: Trip,
+    nextRoutes?: { fifo: Route | null; optimized: Route | null },
+    nextSelectedRouteType?: 'fifo' | 'optimized'
+  ) => {
+    setTrip(nextTrip)
+    setRoutesState(nextRoutes || { fifo: null, optimized: null })
+    if (nextSelectedRouteType) {
+      setSelectedRouteType(nextSelectedRouteType)
+    }
+    setExecutionState(createEmptyExecutionState())
+    setNavigationStateInternal(createEmptyNavigationState())
+    setOriginSource('fallback_monash')
   }, [])
 
   const setTripOrigin = useCallback((origin: RouteOrigin) => {
@@ -365,6 +381,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
         updateStop,
         clearTrip,
         loadDemoData,
+        loadTrip,
         setTripOrigin,
         setGeocodeResults,
         setIsGeocoding,

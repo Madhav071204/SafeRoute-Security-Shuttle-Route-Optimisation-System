@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Stop, DriverLocation, RouteLeg } from '@/types'
 import { formatDistance, formatDuration, getDistanceAndETA } from '@/lib/distance'
 import clsx from 'clsx'
+import type { DriverStopAction } from './DriverModeView'
 
 interface CurrentStopCardProps {
   stop: Stop
@@ -12,6 +13,9 @@ interface CurrentStopCardProps {
   driverLocation: DriverLocation | null
   leg?: RouteLeg
   onMarkComplete: () => void
+  onStopAction?: (action: DriverStopAction) => void | Promise<void>
+  stopActionBusy?: DriverStopAction | null
+  stopActionError?: string | null
   isExpanded?: boolean
 }
 
@@ -22,6 +26,9 @@ export function CurrentStopCard({
   driverLocation,
   leg,
   onMarkComplete,
+  onStopAction,
+  stopActionBusy,
+  stopActionError,
   isExpanded = false,
 }: CurrentStopCardProps) {
   const { distance, eta } = getDistanceAndETA(
@@ -150,18 +157,71 @@ export function CurrentStopCard({
           </motion.button>
         </div>
 
-        {/* Mark Complete button */}
-        <motion.button
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={onMarkComplete}
-          className="complete-button"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-          </svg>
-          <span>Mark Arrived & Continue</span>
-        </motion.button>
+        {onStopAction ? (
+          <div className="space-y-2">
+            {stopActionError && (
+              <div className="bg-danger-50 dark:bg-danger-900/20 border border-danger-200/50 dark:border-danger-800/50 rounded-xl px-3 py-2">
+                <p className="text-xs text-danger-700 dark:text-danger-300">{stopActionError}</p>
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => onStopAction('arrived')}
+                disabled={!!stopActionBusy}
+                className={clsx(
+                  'px-3 py-2 rounded-lg text-xs font-semibold border transition-colors',
+                  'border-surface-200 dark:border-surface-700',
+                  'bg-white/80 dark:bg-surface-900/30',
+                  'text-surface-700 dark:text-surface-200',
+                  !!stopActionBusy && 'opacity-60 cursor-not-allowed'
+                )}
+              >
+                {stopActionBusy === 'arrived' ? '...' : 'Arrived'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onStopAction('picked_up')}
+                disabled={!!stopActionBusy}
+                className={clsx(
+                  'px-3 py-2 rounded-lg text-xs font-semibold border transition-colors',
+                  'border-success-200 dark:border-success-800',
+                  'bg-success-50 dark:bg-success-900/20',
+                  'text-success-800 dark:text-success-300',
+                  !!stopActionBusy && 'opacity-60 cursor-not-allowed'
+                )}
+              >
+                {stopActionBusy === 'picked_up' ? '...' : 'Picked Up'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onStopAction('no_show')}
+                disabled={!!stopActionBusy}
+                className={clsx(
+                  'px-3 py-2 rounded-lg text-xs font-semibold border transition-colors',
+                  'border-danger-200 dark:border-danger-800',
+                  'bg-danger-50 dark:bg-danger-900/20',
+                  'text-danger-800 dark:text-danger-300',
+                  !!stopActionBusy && 'opacity-60 cursor-not-allowed'
+                )}
+              >
+                {stopActionBusy === 'no_show' ? '...' : 'No Show'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <motion.button
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onMarkComplete}
+            className="complete-button"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+            <span>Mark Arrived & Continue</span>
+          </motion.button>
+        )}
       </div>
     </div>
   )

@@ -55,10 +55,8 @@ export function AddressSearchInput({
   })
 
   useEffect(() => {
-    if (value !== query) {
-      setQuery(value)
-    }
-  }, [value])
+    setQuery(value)
+  }, [value, setQuery])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value

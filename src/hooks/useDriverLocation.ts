@@ -52,27 +52,6 @@ export function useDriverLocation(): UseDriverLocationReturn {
     }
   }, [])
 
-  const requestPermission = useCallback(() => {
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser.')
-      setHasPermission(false)
-      return
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        handlePositionSuccess(position)
-        startTracking()
-      },
-      handlePositionError,
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    )
-  }, [handlePositionSuccess, handlePositionError])
-
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.')
@@ -94,6 +73,27 @@ export function useDriverLocation(): UseDriverLocationReturn {
       }
     )
   }, [handlePositionSuccess, handlePositionError])
+
+  const requestPermission = useCallback(() => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser.')
+      setHasPermission(false)
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        handlePositionSuccess(position)
+        startTracking()
+      },
+      handlePositionError,
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    )
+  }, [handlePositionSuccess, handlePositionError, startTracking])
 
   const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null) {

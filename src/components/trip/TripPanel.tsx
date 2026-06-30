@@ -235,7 +235,7 @@ export function TripPanel() {
   }
 
   return (
-    <Card variant="glass" className="sticky top-24">
+    <Card variant="glass" className="self-start xl:sticky xl:top-24">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -453,7 +453,7 @@ export function TripPanel() {
                         Use your current location?
                       </h4>
                       <p className="text-xs text-primary-700 dark:text-primary-300 mt-1">
-                        The route will start from your van's current position for accurate navigation.
+                        The route will start from your van&apos;s current position for accurate navigation.
                       </p>
                     </div>
                   </div>

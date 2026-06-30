@@ -37,7 +37,7 @@ export default function Home() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-6"
+          className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10 pt-8 pb-6"
         >
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
@@ -83,7 +83,7 @@ export default function Home() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
+        className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10 py-6"
       >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <motion.div variants={itemVariants} className="lg:col-span-1">

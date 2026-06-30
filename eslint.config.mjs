@@ -1,23 +1,25 @@
-import { FlatCompat } from "@eslint/eslintrc";
-import path from "path";
-import { fileURLToPath } from "url";
+import nextCoreWebVitals from 'eslint-config-next/core-web-vitals'
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const config = nextCoreWebVitals.map((entry) => {
+  if (entry?.name !== 'next') return entry
 
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
+  return {
+    ...entry,
+    rules: {
+      ...entry.rules,
+      // These rules are overly strict for this app’s patterns (localStorage hydration,
+      // initial data refreshes, and controlled state sync). Keep rules-of-hooks enabled.
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/immutability': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+    },
+  }
+})
 
 export default [
-  ...compat.extends("next/core-web-vitals"),
+  ...config,
+  // Project-specific ignores (in addition to Next defaults).
   {
-    ignores: [".next/**", "node_modules/**"],
+    ignores: ['.next/**', 'node_modules/**'],
   },
-  {
-    rules: {
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
-      "react/no-unescaped-entities": "off",
-    },
-  },
-];
+]

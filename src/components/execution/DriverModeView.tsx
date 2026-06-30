@@ -18,7 +18,13 @@ const RECALCULATION_COOLDOWN_MS = 15000 // 15 seconds between recalculations
 const CONSECUTIVE_OFF_ROUTE_REQUIRED = 3 // Need 3 consecutive off-route readings
 const POST_ROUTE_UPDATE_GRACE_PERIOD_MS = 10000 // 10 seconds grace after route update
 
-export function DriverModeView() {
+export type DriverStopAction = 'arrived' | 'picked_up' | 'no_show'
+
+export interface DriverModeViewProps {
+  onStopAction?: (stopId: string, action: DriverStopAction) => void | Promise<void>
+}
+
+export function DriverModeView({ onStopAction }: DriverModeViewProps) {
   const {
     trip,
     routes,
@@ -47,6 +53,8 @@ export function DriverModeView() {
   const [isBottomSheetExpanded, setIsBottomSheetExpanded] = useState(false)
   const [navigationError, setNavigationError] = useState<string | null>(null)
   const [isInitialFetch, setIsInitialFetch] = useState(true)
+  const [stopActionBusy, setStopActionBusy] = useState<DriverStopAction | null>(null)
+  const [stopActionError, setStopActionError] = useState<string | null>(null)
   
   // Off-route tracking refs (using refs to avoid causing re-renders)
   const consecutiveOffRouteCountRef = useRef(0)
@@ -55,9 +63,8 @@ export function DriverModeView() {
   const isFetchingRef = useRef(false)
 
   const selectedRoute = selectedRouteType === 'fifo' ? routes.fifo : routes.optimized
-  if (!selectedRoute) return null
-
-  const { orderedStopIds, legs } = selectedRoute
+  const orderedStopIds = selectedRoute?.orderedStopIds ?? []
+  const legs = selectedRoute?.legs ?? []
   const { currentStopIndex, completedStopIds, trackingMode, driverLocation } = executionState
   const totalStops = orderedStopIds.length
   const completedCount = completedStopIds.length
@@ -65,6 +72,25 @@ export function DriverModeView() {
   const currentStopId = orderedStopIds[currentStopIndex]
   const currentStop = trip.stops.find((s) => s.id === currentStopId)
   const currentLeg = legs[currentStopIndex]
+
+  const handleStopAction = useCallback(async (action: DriverStopAction) => {
+    if (!currentStopId) return
+    if (!onStopAction) return
+    if (stopActionBusy) return
+
+    setStopActionBusy(action)
+    setStopActionError(null)
+    try {
+      await onStopAction(currentStopId, action)
+      if (action === 'picked_up' || action === 'no_show') {
+        markStopComplete()
+      }
+    } catch (e) {
+      setStopActionError(e instanceof Error ? e.message : 'Failed to update stop')
+    } finally {
+      setStopActionBusy(null)
+    }
+  }, [currentStopId, onStopAction, stopActionBusy, markStopComplete])
 
   // Get current destination coordinates
   const destinationCoordinates = useMemo((): Coordinates | null => {
@@ -325,6 +351,24 @@ export function DriverModeView() {
     fetchNavigationRoute(false)
   }
 
+  if (!selectedRoute) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-surface-100 dark:bg-surface-900">
+        <div className="max-w-md w-full mx-4 rounded-2xl border border-surface-200 dark:border-surface-700 bg-white/80 dark:bg-surface-800/70 backdrop-blur-xl p-6">
+          <p className="text-sm font-semibold text-surface-900 dark:text-white">No active route loaded</p>
+          <p className="text-sm text-surface-600 dark:text-surface-400 mt-1">
+            Return to the dispatcher to optimize and activate a trip, then open driver mode again.
+          </p>
+          <div className="mt-4">
+            <Button variant="danger" onClick={endExecution} fullWidth>
+              Exit driver mode
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="h-screen w-screen flex flex-col bg-surface-100 dark:bg-surface-900 overflow-hidden">
       {/* Premium Top Bar */}
@@ -548,6 +592,9 @@ export function DriverModeView() {
               driverLocation={executionState.driverLocation}
               leg={currentLeg}
               onMarkComplete={markStopComplete}
+              onStopAction={onStopAction ? (action) => handleStopAction(action) : undefined}
+              stopActionBusy={stopActionBusy}
+              stopActionError={stopActionError}
               isExpanded={isBottomSheetExpanded}
             />
           )}
@@ -592,18 +639,57 @@ export function DriverModeView() {
                 </motion.button>
               </div>
 
-              {/* Mark Complete button */}
-              <motion.button
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={markStopComplete}
-                className="complete-button"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Mark Arrived & Continue</span>
-              </motion.button>
+              {onStopAction ? (
+                <div className="space-y-2">
+                  {stopActionError && (
+                    <div className="bg-danger-50 dark:bg-danger-900/20 border border-danger-200/50 dark:border-danger-800/50 rounded-xl px-3 py-2">
+                      <p className="text-xs text-danger-700 dark:text-danger-300">{stopActionError}</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleStopAction('arrived')}
+                      disabled={!!stopActionBusy}
+                      isLoading={stopActionBusy === 'arrived'}
+                    >
+                      Arrived
+                    </Button>
+                    <Button
+                      variant="success"
+                      size="sm"
+                      onClick={() => handleStopAction('picked_up')}
+                      disabled={!!stopActionBusy}
+                      isLoading={stopActionBusy === 'picked_up'}
+                    >
+                      Picked Up
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleStopAction('no_show')}
+                      disabled={!!stopActionBusy}
+                      isLoading={stopActionBusy === 'no_show'}
+                    >
+                      No Show
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={markStopComplete}
+                  className="complete-button"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Mark Arrived & Continue</span>
+                </motion.button>
+              )}
             </div>
           )}
 

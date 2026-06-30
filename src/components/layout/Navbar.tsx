@@ -10,6 +10,9 @@ export function Navbar() {
   const pathname = usePathname()
 
   const navLinks = [
+    { href: '/request', label: 'Request' },
+    { href: '/dispatcher', label: 'Dispatcher' },
+    { href: '/driver', label: 'Driver' },
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/settings', label: 'Settings' },
     { href: '/about', label: 'About' },
@@ -23,7 +26,7 @@ export function Navbar() {
       className="sticky top-0 z-50 w-full"
     >
       <div className="glass-intense border-b border-surface-200/50 dark:border-surface-700/50">
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-3 group">
               <motion.div

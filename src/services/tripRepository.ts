@@ -1,15 +1,32 @@
 import { PersistedTrip, TripSummary, DailyStats, WeeklyStats, DestinationStats, HourlyActivity, TripStatus } from '@/types/trip'
+import { DispatchStopStatus, DispatchTrip } from '@/types/dispatch'
+import { DriverLocation } from '@/types'
 
 const STORAGE_KEY = 'saferoute_trips'
 const STORAGE_VERSION = 1
+const DISPATCH_STORAGE_KEY = 'saferoute_dispatch'
+const DISPATCH_STORAGE_VERSION = 1
+
+const EVENT_KEY_TRIPS = 'trip_history'
+const EVENT_KEY_DISPATCH = 'dispatch_trip'
 
 interface StorageData {
   version: number
   trips: PersistedTrip[]
 }
 
+interface DispatchStorageData {
+  version: number
+  activeTrip: DispatchTrip | null
+}
+
 function isClient(): boolean {
   return typeof window !== 'undefined'
+}
+
+function notify(key: string): void {
+  if (!isClient()) return
+  window.dispatchEvent(new CustomEvent('saferoute:repo', { detail: { key } }))
 }
 
 function getStorageData(): StorageData {
@@ -40,8 +57,37 @@ function setStorageData(data: StorageData): void {
   
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    notify(EVENT_KEY_TRIPS)
   } catch (e) {
     console.error('Failed to save trip storage:', e)
+  }
+}
+
+function getDispatchStorageData(): DispatchStorageData {
+  if (!isClient()) {
+    return { version: DISPATCH_STORAGE_VERSION, activeTrip: null }
+  }
+
+  try {
+    const raw = localStorage.getItem(DISPATCH_STORAGE_KEY)
+    if (!raw) return { version: DISPATCH_STORAGE_VERSION, activeTrip: null }
+    const parsed = JSON.parse(raw) as DispatchStorageData
+    if (parsed.version !== DISPATCH_STORAGE_VERSION) {
+      return { version: DISPATCH_STORAGE_VERSION, activeTrip: null }
+    }
+    return parsed
+  } catch {
+    return { version: DISPATCH_STORAGE_VERSION, activeTrip: null }
+  }
+}
+
+function setDispatchStorageData(data: DispatchStorageData): void {
+  if (!isClient()) return
+  try {
+    localStorage.setItem(DISPATCH_STORAGE_KEY, JSON.stringify(data))
+    notify(EVENT_KEY_DISPATCH)
+  } catch (e) {
+    console.error('Failed to save dispatch storage:', e)
   }
 }
 
@@ -241,6 +287,94 @@ export const tripRepository = {
     }
     
     return stats
+  },
+}
+
+export function subscribeDispatchTrip(cb: () => void): () => void {
+  if (!isClient()) return () => {}
+
+  const onCustom = (e: Event) => {
+    const ev = e as CustomEvent<{ key?: string }>
+    if (ev.detail?.key === EVENT_KEY_DISPATCH) cb()
+  }
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === DISPATCH_STORAGE_KEY) cb()
+  }
+
+  window.addEventListener('saferoute:repo', onCustom)
+  window.addEventListener('storage', onStorage)
+  return () => {
+    window.removeEventListener('saferoute:repo', onCustom)
+    window.removeEventListener('storage', onStorage)
+  }
+}
+
+export const dispatchTripRepository = {
+  async getActiveTrip(): Promise<DispatchTrip | null> {
+    const data = getDispatchStorageData()
+    return data.activeTrip
+  },
+
+  async setActiveTrip(trip: DispatchTrip): Promise<void> {
+    setDispatchStorageData({ version: DISPATCH_STORAGE_VERSION, activeTrip: trip })
+  },
+
+  async clearActiveTrip(): Promise<void> {
+    setDispatchStorageData({ version: DISPATCH_STORAGE_VERSION, activeTrip: null })
+  },
+
+  async updateDriverLocation(location: DriverLocation | null): Promise<void> {
+    const data = getDispatchStorageData()
+    if (!data.activeTrip) return
+    const updated: DispatchTrip = { ...data.activeTrip, driverLocation: location }
+    setDispatchStorageData({ ...data, activeTrip: updated })
+  },
+
+  async markTripStarted(startedAtIso: string = new Date().toISOString()): Promise<void> {
+    const data = getDispatchStorageData()
+    if (!data.activeTrip) return
+    const updated: DispatchTrip = {
+      ...data.activeTrip,
+      status: 'active',
+      startedAt: data.activeTrip.startedAt || startedAtIso,
+    }
+    setDispatchStorageData({ ...data, activeTrip: updated })
+  },
+
+  async markTripCompleted(completedAtIso: string = new Date().toISOString()): Promise<void> {
+    const data = getDispatchStorageData()
+    if (!data.activeTrip) return
+    const updated: DispatchTrip = {
+      ...data.activeTrip,
+      status: 'completed',
+      completedAt: completedAtIso,
+    }
+    setDispatchStorageData({ ...data, activeTrip: updated })
+  },
+
+  async updateStopStatus(stopId: string, status: DispatchStopStatus): Promise<void> {
+    const data = getDispatchStorageData()
+    if (!data.activeTrip) return
+    const at = new Date().toISOString()
+
+    const stops = data.activeTrip.stops.map((s) => {
+      if (s.stopId !== stopId) return s
+      const next = { ...s, status }
+      if (status === 'arrived') next.arrivedAt = next.arrivedAt || at
+      if (status === 'picked_up') next.pickedUpAt = next.pickedUpAt || at
+      if (status === 'completed') next.completedAt = next.completedAt || at
+      if (status === 'cancelled') next.cancelledAt = next.cancelledAt || at
+      if (status === 'no_show') next.noShowAt = next.noShowAt || at
+      return next
+    })
+
+    setDispatchStorageData({
+      ...data,
+      activeTrip: {
+        ...data.activeTrip,
+        stops,
+      },
+    })
   },
 }
 

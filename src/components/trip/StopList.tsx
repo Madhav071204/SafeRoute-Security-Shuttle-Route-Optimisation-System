@@ -62,7 +62,7 @@ export function StopList({ disabled }: StopListProps) {
         )}
       </div>
       
-      <div className="space-y-2 max-h-[400px] overflow-y-auto scrollbar-thin pr-1">
+      <div className="space-y-2 max-h-[360px] sm:max-h-[420px] lg:max-h-[520px] xl:max-h-[560px] overflow-y-auto scrollbar-thin pr-1">
         <AnimatePresence initial={false}>
           {trip.stops.map((stop, index) => (
             <motion.div

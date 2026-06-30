@@ -5,9 +5,13 @@ import { useTrip } from '@/context/TripContext'
  import { useSettings } from '@/hooks/useSettings'
 import { Button } from '@/components/ui/Button'
 import { AnimatedCounter } from '@/components/ui/AnimatedCounter'
-import { DriverModeView } from './DriverModeView'
+import { DriverModeView, DriverModeViewProps } from './DriverModeView'
 
-export function ExecutionView() {
+interface ExecutionViewProps {
+  driverModeProps?: DriverModeViewProps
+}
+
+export function ExecutionView({ driverModeProps }: ExecutionViewProps) {
   const {
     trip,
     routes,
@@ -167,5 +171,5 @@ export function ExecutionView() {
     )
   }
 
-  return <DriverModeView />
+  return <DriverModeView {...(driverModeProps || {})} />
 }

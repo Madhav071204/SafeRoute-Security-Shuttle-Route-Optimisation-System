@@ -36,7 +36,7 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-6"
+          className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10 pt-8 pb-6"
         >
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
@@ -75,7 +75,7 @@ export default function DashboardPage() {
         </motion.div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10 py-6">
         {error && (
           <div className="mb-6 p-4 rounded-lg bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800 text-danger-700 dark:text-danger-300 text-sm">
             {error}
