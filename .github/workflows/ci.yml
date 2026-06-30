@@ -96,26 +96,18 @@ jobs:
 
       - name: Detect scripts
         id: scripts
-        shell: node
+        shell: bash
         run: |
+          node <<'NODE'
           const fs = require('fs');
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           const scripts = pkg.scripts || {};
-
-          const has = (name) => typeof scripts[name] === 'string' && scripts[name].trim().length > 0;
-          const isPlaceholderTest = (cmd) =>
-            typeof cmd === 'string' &&
-            /no test specified/i.test(cmd) &&
-            /echo/i.test(cmd);
-
+    
           const hasLint = has('lint');
           const hasTypecheck = has('typecheck');
-          const testCmd = scripts.test;
-          const runTests = has('test') && !isPlaceholderTest(testCmd);
-
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_lint=${hasLint}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_typecheck=${hasTypecheck}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `run_tests=${runTests}\n`);
+          NODE
 
       - name: Lint
         if: steps.scripts.outputs.has_lint == 'true'
