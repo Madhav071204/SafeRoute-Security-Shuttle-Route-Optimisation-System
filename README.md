@@ -2,6 +2,17 @@
 
 A route optimization tool for university security shuttles. Built as a portfolio project demonstrating full-stack development, algorithm implementation, and modern web technologies.
 
+## CI
+
+[![CI](https://github.com/Madhav071204/SafeRoute-Security-Shuttle-Route-Optimisation-System/actions/workflows/ci.yml/badge.svg)](https://github.com/Madhav071204/SafeRoute-Security-Shuttle-Route-Optimisation-System/actions/workflows/ci.yml)
+
+GitHub Actions runs linting, TypeScript typechecking, and a production build on:
+
+- pushes to `main` (and `develop`)
+- pull requests targeting `main`
+
+See `docs/ci-cd.md` for details.
+
 ![SafeRoute Dashboard](./docs/demo.png)
 
 ## The Problem

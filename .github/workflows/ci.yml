@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint • Typecheck • Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # This repo docs require Node 18+. Node 20 is the current LTS.
+          node-version: 20
+
+      - name: Detect package manager
+        id: pm
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            echo "manager=pnpm" >> "$GITHUB_OUTPUT"
+            echo "lockfile=pnpm-lock.yaml" >> "$GITHUB_OUTPUT"
+          elif [ -f yarn.lock ]; then
+            echo "manager=yarn" >> "$GITHUB_OUTPUT"
+            echo "lockfile=yarn.lock" >> "$GITHUB_OUTPUT"
+          elif [ -f package-lock.json ]; then
+            echo "manager=npm" >> "$GITHUB_OUTPUT"
+            echo "lockfile=package-lock.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "No lockfile found. Please commit a lockfile for reproducible CI installs." >&2
+            exit 1
+          fi
+
+      - name: Cache dependencies (npm)
+        if: steps.pm.outputs.manager == 'npm'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Cache dependencies (yarn)
+        if: steps.pm.outputs.manager == 'yarn'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/yarn
+            .yarn/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Cache dependencies (pnpm)
+        if: steps.pm.outputs.manager == 'pnpm'
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            corepack enable
+            pnpm install --frozen-lockfile
+          elif [ -f yarn.lock ]; then
+            corepack enable
+            yarn install --frozen-lockfile
+          else
+            npm ci
+          fi
+
+      - name: Detect scripts
+        id: scripts
+        shell: node
+        run: |
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const scripts = pkg.scripts || {};
+
+          const has = (name) => typeof scripts[name] === 'string' && scripts[name].trim().length > 0;
+          const isPlaceholderTest = (cmd) =>
+            typeof cmd === 'string' &&
+            /no test specified/i.test(cmd) &&
+            /echo/i.test(cmd);
+
+          const hasLint = has('lint');
+          const hasTypecheck = has('typecheck');
+          const testCmd = scripts.test;
+          const runTests = has('test') && !isPlaceholderTest(testCmd);
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_lint=${hasLint}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_typecheck=${hasTypecheck}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `run_tests=${runTests}\n`);
+
+      - name: Lint
+        if: steps.scripts.outputs.has_lint == 'true'
+        run: npm run lint
+
+      - name: TypeScript typecheck
+        if: steps.scripts.outputs.has_typecheck == 'true'
+        run: npm run typecheck
+
+      - name: Tests
+        if: steps.scripts.outputs.run_tests == 'true'
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
