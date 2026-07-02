@@ -1,0 +1,43 @@
+# SafeRoute — local Docker Compose setup
+#
+# Quick start:
+#   1. cp .env.example .env.local
+#   2. Add your Mapbox token to .env.local
+#   3. docker compose up --build
+#   4. Open http://localhost:3000
+#
+# Note: NEXT_PUBLIC_* variables are baked into the client bundle at image build
+# time. If you change .env.local, rebuild with: docker compose up --build
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Build-time arg — required for maps and geocoding in the browser bundle.
+        NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN}
+    image: saferoute:latest
+    container_name: saferoute-app
+    ports:
+      - "3000:3000"
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      NODE_ENV: production
+      # Runtime env for server-side API routes (client bundle still uses build-time value).
+      NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN}
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3000/', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

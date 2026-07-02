@@ -1,0 +1,48 @@
+# Dependencies — installed fresh inside the image
+node_modules
+
+# Next.js build output — produced inside the image
+.next
+out
+build
+
+# Git metadata — not needed to run the app
+.git
+.gitignore
+
+# Environment files — secrets must be injected at build/run time, not baked in
+.env
+.env.*
+!.env.example
+
+# Local tooling and editor files
+.idea
+.vscode
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
+
+# Logs and debug artefacts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Test and coverage output
+coverage
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+next-env.d.ts
+
+# Documentation and CI — not required in the runtime image
+docs
+.github
+README.md
+LICENSE
+
+# Docker files themselves (avoid recursive copy noise)
+Dockerfile
+docker-compose*.yml
+.dockerignore
