@@ -136,13 +136,15 @@ export default function AboutPage() {
                     <svg className="w-4 h-4 text-success-500" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    SafeRoute does not store your trip data
+                    SafeRoute stores some data in your browser
                   </h4>
                   <ul className="space-y-2 ml-6">
                     {[
-                      'Passenger addresses are held in browser memory only',
-                      'Addresses are cleared when you close the browser tab',
-                      'No addresses are saved to your device or our servers',
+                      'SafeRoute is a proof-of-concept — avoid entering real or sensitive passenger information',
+                      'Trip history, ride requests, settings, and the active dispatch trip may be saved in browser localStorage',
+                      'Saved data may remain after you close the tab or browser and has no automatic expiry',
+                      'The active dispatch trip may include driver location coordinates',
+                      'Data stays on this device (not a first-party server) and can be removed using browser storage controls',
                     ].map((item, index) => (
                       <li key={index} className="text-surface-600 dark:text-surface-400 text-sm flex items-start gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-surface-400 mt-2 flex-shrink-0" />

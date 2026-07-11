@@ -34,7 +34,7 @@ SafeRoute lets drivers enter up to 15 passenger addresses and calculates an opti
 - **Interactive Map**: Mapbox GL map with markers and route polylines
 - **Driver Execution View**: Step-by-step navigation with progress tracking
 - **Cost Estimation**: Fuel cost calculations based on configurable consumption rates
-- **Privacy-Focused**: No data persistence - addresses stored in browser session only
+- **Local-Only Storage**: Trip, request, and settings data are stored in the browser's `localStorage` (no first-party server) — see [Privacy and Data Handling](#privacy-and-data-handling)
 - **Demo Mode**: Pre-loaded fake addresses for portfolio demonstrations
 
 ## Tech Stack
@@ -123,18 +123,42 @@ npm run dev
 |----------|-------------|----------|
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | Mapbox API public token for maps and geocoding | Yes |
 
-## Privacy Notice
+## Privacy and Data Handling
 
-SafeRoute does **not** store your trip data:
-- Passenger addresses are held in browser memory only
-- Addresses are cleared when you close the browser tab
-- No addresses are saved to your device or our servers
+SafeRoute is a personal proof-of-concept. It is **not** intended for sensitive or real passenger operations in its current state.
 
-However, addresses **are** sent to third-party services:
-- Mapbox Geocoding API (to convert addresses to coordinates)
+### Data stored locally in your browser
+
+Some application data is stored in your browser's `localStorage`:
+
+- **Trip history** (`saferoute_trips`) — including stops with passenger names, drop-off addresses, and coordinates.
+- **Active dispatch trip** (`saferoute_dispatch`) — including the driver's last known location coordinates while a trip is running.
+- **Ride requests** (`saferoute_ride_requests`) — including passenger names, optional contact details, and pickup/destination addresses and coordinates.
+- **App settings** (`saferoute_settings`) — such as fuel cost values and the default origin address.
+
+This locally stored data:
+
+- **May remain after you close the tab or browser** — it is not session-only.
+- Stays on the same browser and device until it is cleared by the application, overwritten, or removed through your browser's storage controls.
+- Has no automatic expiry (trip history is only capped at the 500 most recent trips).
+- Is stored as plain text and is **not** encrypted.
+- Is local to your device only — it is not synced to any first-party server. Storing data in `localStorage` is **not** equivalent to server-side database storage.
+
+**Clearing data:** the Settings page can reset app settings, and the Dispatcher view can clear the active dispatch trip. There is currently no in-app control to clear saved trip history or ride requests — use your browser's site-data/storage controls to remove them.
+
+### Third-party processing (Mapbox)
+
+Addresses and location coordinates are sent to Mapbox to perform the app's core functions:
+
+- Mapbox Geocoding / Search APIs (to convert addresses to coordinates)
 - Mapbox Directions API (to calculate driving routes)
 
-These services have their own privacy policies. Do not enter addresses for real students in a production context.
+Mapbox processes this data under its own terms and privacy policy. This project makes no claim about how Mapbox stores, retains, or deletes that data.
+
+### Recommendations
+
+- Do not enter real passenger addresses in this proof-of-concept.
+- Avoid retaining precise passenger addresses or driver location longer than necessary; clear stored data when you are finished.
 
 ## Disclaimer
 
