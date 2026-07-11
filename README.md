@@ -208,6 +208,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-Built by **Madhav** | Monash University Computer Science Student
+Built by **Ekachit** | Monash University Computer Science Student
 
 [LinkedIn](https://linkedin.com/in/your-profile) | [GitHub](https://github.com/Madhav071204)
