@@ -20,7 +20,7 @@
 | Application URL | `http://localhost:3000` (port 3000 was free) |
 | Browser and version | **None.** No browser was driven — see "Environment limitations". |
 | Viewports tested | **None** (no browser automation available) |
-| Mapbox availability | `NEXT_PUBLIC_MAPBOX_TOKEN` present in `.env.local`, non-placeholder, valid. Confirmed working via live 200 responses from geocoding, route, and directions APIs. Credentials were **not** read, printed, or exposed. |
+| Mapbox availability | `NEXT_PUBLIC_MAPBOX_TOKEN` variable name present in `.env.local` (value **not** read, printed, or exposed). **Runtime connectivity is intermittent in this environment — see the two 2026-07-13 continuation sections below:** the same running server (same PID) failed every server-side Mapbox call with a Node TLS chain error (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`) in one pass, then succeeded with live road/geocode/directions data ~10 minutes later. Live success proves the token is valid; the failures are an environment/TLS condition, not an application defect. |
 
 ### Testing method and its boundary
 
@@ -443,3 +443,538 @@ to close every "Blocked by environment" / "Not tested" row above — especially 
 rendering after location grant, geolocation denial fallback, drawer scroll on mobile, and
 the refresh regression (H7). DEF-5 (unsupported claims) is a documentation/honesty fix and
 can be batched with copy changes.
+
+---
+
+# Phase 2A continuation — strict evidence re-verification (2026-07-13)
+
+> This continuation re-runs the runtime portion of the audit under a stricter evidence
+> standard. **No source code was modified and no fixes were made.** Read-only architecture
+> inspection and genuine runtime testing only.
+
+## Evidence standard applied
+
+Every result below is tagged with exactly one of these categories, and no scenario is
+marked as passing on the strength of source code alone:
+
+- **Runtime verified** — directly executed and observed in a running application (server
+  process / HTTP response).
+- **API verified** — a real HTTP call was made and the response inspected.
+- **Code inspected only — runtime behaviour not verified** — implementation was read but
+  the behaviour was not executed.
+- **Blocked by environment** — could not be exercised in this environment.
+- **Not tested.**
+
+## Re-run environment
+
+| Field | Value |
+| ----- | ----- |
+| Date / timezone | 2026-07-13, AEST (UTC+10) |
+| Operating system | Windows (win32 10.0.26200), PowerShell |
+| Node.js version | **v22.17.1** (confirmed via `node --version`) |
+| npm version | **10.9.2** (confirmed via `npm --version`) |
+| Docker base image | `node:20-slim` (Node **20**) per `Dockerfile` line 14 |
+| Framework | Next.js 16.2.9 (Turbopack), React 19 |
+| Dev server | `npm run dev`, `http://localhost:3000`, "Ready in 1688ms" (started this session) |
+| `.env.local` | Present; `NEXT_PUBLIC_MAPBOX_TOKEN` variable **name present** (value never read, printed, or exposed). Runtime status covered in the finding below. |
+
+**Environment-version note (recorded per audit rule):** the local runtime is Node
+`v22.17.1` / npm `10.9.2`, whereas the Docker build pins Node `20` (`node:20-slim`). This
+is a **major-version difference**, not automatically a defect, but a compatibility point
+worth verifying before relying on container parity.
+
+## Browser availability check (mandatory, before Steps 4–9)
+
+| Capability | Available? | Notes |
+| ---------- | ---------- | ----- |
+| 1. Browser that can load the local app | **No** | No browser-automation MCP/tooling present; only a GitLens MCP server is available. |
+| 2. Browser dev tools / console output | **No** | Cannot read the client console. |
+| 3. Network-request inspection (client) | **No** | Server-side request logs are available; the browser network panel is not. |
+| 4. Viewport resizing / device emulation | **No** | Cannot measure or emulate viewports. |
+| 5. Geolocation permission controls / simulation | **No** | `navigator.geolocation` cannot be driven here. |
+| 6. LocalStorage inspection | **No** | Cannot read `localStorage`. |
+
+**Consequence:** every browser-dependent scenario listed in the audit brief (page/map
+rendering, autocomplete interaction, buttons/forms, loading/error states, geolocation
+permission, driver-marker rendering, blank-map regression, render/calc loops, driver-mode
+interaction, stop completion, drawer open/close/scroll, refresh/persistence, localStorage
+inspection, responsive layouts, light/dark mode, browser console errors, network-request
+repetition, keyboard navigation, touch-target usability) is recorded as
+**`Blocked by environment — browser interaction unavailable`**. None were converted to a
+pass via code inspection, and no browser evidence was fabricated.
+
+## Critical runtime/environment finding — Mapbox unreachable from the Node server (TLS)
+
+**This is an environment condition, not a confirmed SafeRoute application defect.**
+
+- **Observed (Runtime verified):** every server-side Mapbox call failed. `/api/directions`
+  returned HTTP 500; the dev-server log shows:
+  `Directions API error: TypeError: fetch failed ... [cause]: Error: unable to verify the
+  first certificate ... code: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'`.
+- **Isolation (API verified):** the same Mapbox token, called from PowerShell using the
+  Windows/OS trust store, succeeded — Geocoding v5 returned `featureCount=1` and Directions
+  `driving` returned `code=Ok`, `routeCount=1`, a polyline present. Plain HTTPS GETs to
+  `https://api.mapbox.com/` and `https://example.com` also returned 200 from PowerShell.
+- **Conclusion:** the token is valid and Mapbox is reachable; Node's `fetch` (undici) does
+  not trust the intercepting/leaf certificate presented in this environment, so all
+  in-server Mapbox requests fail with a TLS chain error. The project already anticipates
+  this class of environment: the `Dockerfile` exposes an `INSECURE_NPM_SSL` build arg and
+  `NODE_TLS_REJECT_UNAUTHORIZED=0` workaround "when a corporate proxy breaks TLS".
+- **Impact on this audit:** in this runtime, only the **fallback / error** paths of
+  Mapbox-backed endpoints could be exercised. The live Mapbox "happy path" through the
+  Next.js server is **Blocked by environment (TLS)** here; it was API-verified only
+  out-of-process (PowerShell), which does not prove the in-app rendering.
+
+## Runtime API results (this session — API verified unless noted)
+
+All calls were `POST http://localhost:3000<path>` with synthetic public Melbourne-area
+coordinates. Exact origin/stop coordinates are intentionally not reproduced here; response
+shapes are sanitized.
+
+### `/api/optimize`
+
+| ID | Request shape | HTTP | Response (sanitized) | Category | Note |
+| -- | ------------- | ---- | -------------------- | -------- | ---- |
+| O1 | origin + 2 stops w/ coords | 200 | `{orderedStopIds:[b,a], totalDistanceKm:18.9}` | API verified | nearest-neighbour ordering runs |
+| O2 | stops only (no origin) | 400 | `{error:"...origin coordinates required"}` | API verified | |
+| O3 | origin only (no stops) | 400 | `{error:"...stops array required"}` | API verified | |
+| O4 | origin + `stops:[]` | 200 | `{orderedStopIds:[], totalDistanceKm:0}` | API verified | |
+| O5 | origin + stops missing coords | 200 | `{orderedStopIds:[], totalDistanceKm:0}` | API verified | invalid stops filtered |
+| O6 | origin + duplicate coords (3) | 200 | `{orderedStopIds:[c,a,b], totalDistanceKm:21.17}` | API verified | **no de-duplication** (all ids kept) |
+| O7 | origin `{lat:0,lng:0}` + 1 stop | 400 | `{error:"...origin coordinates required"}` | API verified | **DEF-6 reproduced at runtime** — valid 0,0 rejected |
+| O8 | origin + **16** stops | 200 | all 16 ids returned | API verified | **DEF/observation: no server-side max-stop cap** (UI-only 15 cap) |
+
+### `/api/route`
+
+| ID | Request shape | HTTP | Response (sanitized) | Category | Note |
+| -- | ------------- | ---- | -------------------- | -------- | ---- |
+| RT1 | origin + 3 stops + FIFO order | 200 | `polyline:""`, 3 legs, `totalDistanceKm:35.71`, `totalDurationMinutes:53.56` (each leg duration == distance ÷ 40 km/h × 60) | Runtime verified (fallback path) | **DEF-4 reproduced at runtime** — because Mapbox is TLS-blocked, the Haversine fallback ran and returned the **identical response shape with an empty polyline and 40 km/h estimates**, with no field distinguishing it from real road metrics. The road (Mapbox) branch was **Blocked by environment (TLS)** here. |
+| RT2 | no origin | 400 | `{error:"...origin coordinates required"}` | API verified | |
+| RT3 | no `orderedStopIds` | 400 | `{error:"...stops and orderedStopIds required"}` | API verified | |
+| RT4 | origin + `orderedStopIds:[]` | 200 | `{polyline:"", legs:[], totalDistanceKm:0, totalDurationMinutes:0}` | API verified | |
+
+### `/api/geocode-batch`
+
+| ID | Request shape | HTTP | Response (sanitized) | Category | Note |
+| -- | ------------- | ---- | -------------------- | -------- | ---- |
+| G1 | valid address | 200 | `{results:[{success:false, error:"fetch failed"}]}` | Runtime verified (degraded) | Live geocode **Blocked by environment (TLS)**; endpoint degrades to per-address `success:false` and does **not** crash. The `"Address not found"` / `success:true` branches were **not** reached in this runtime. |
+| G2 | whitespace `"   "` | 200 | `{results:[{success:false, error:"fetch failed"}]}` | Runtime verified (degraded) | Same TLS cause; not the "not found" branch. |
+| G3 | nonsense string | 200 | `{results:[{success:false, error:"fetch failed"}]}` | Runtime verified (degraded) | Same. |
+| G4 | body `{}` (no `addresses`) | 400 | `{error:"...addresses array required"}` | API verified | |
+| G5 | `addresses:[]` | 200 | `{results:[]}` | API verified | |
+
+**Note (candidate observation, not added to confirmed defects):** the raw fetch error
+string (`"fetch failed"`) is surfaced to the client per address. This leaks a low-value
+internal error message and is indistinguishable to the UI from a genuine "address not
+found". Verifying the user-facing effect requires a browser (Blocked by environment).
+
+### `/api/directions`
+
+| ID | Request shape | HTTP | Response (sanitized) | Category | Note |
+| -- | ------------- | ---- | -------------------- | -------- | ---- |
+| DIR1 | valid origin + destination | 500 | `{success:false, error:"Internal server error"}` | Runtime verified | No Haversine fallback exists on this route; the TLS `fetch failed` throws and is caught as a generic 500. Confirms the architecture note that `/api/directions` has **no fallback**. Dev-log printed the stack + `UNABLE_TO_VERIFY_LEAF_SIGNATURE` cause. |
+| DIR2 | non-numeric origin coords | 400 | `{success:false, error:"Invalid origin coordinates"}` | API verified | `typeof` guard works |
+| DIR3 | missing destination | 400 | `{success:false, error:"Invalid destination coordinates"}` | API verified | |
+
+### Page routes (SSR only)
+
+`GET /`, `/driver`, `/dispatcher`, `/request`, `/dashboard`, `/settings`, `/about` each
+returned **HTTP 200** with a non-trivial HTML body (20,399–35,784 bytes) and **no**
+error marker. **Category: Runtime verified (SSR response only).** Client-side hydration,
+rendering, and the map canvas remain **Blocked by environment — browser interaction
+unavailable**.
+
+## Strict re-classification of the earlier matrix
+
+The earlier matrix used "Pass / Partial / Fail / Blocked / Not tested". Under the strict
+standard the mapping is:
+
+- Every **"Partial (code)" / "Partial/Fail (code)" / "(code)"** row is
+  **Code inspected only — runtime behaviour not verified**. This includes: I3, I4, S4,
+  V1, V2, V8, C1, C3, C4, C5, R4, R5, R8, R9, R10, R11, D3, D5, D7, D8, and the C-series
+  documentation observations. The underlying code claims still stand as *code inspection*,
+  but none is a runtime pass.
+- Rows previously **"Pass (API)"** remain valid as **API verified** and were re-executed
+  this session where applicable: V3, V4 (O4/O5), V6/V5 behaviour is now **Blocked by
+  environment (TLS)** for the live-geocode branch, V7 (O6), V11 (O2/RT2), V12 (O3),
+  V13 (G4), V14/DEF-6 (O7), R1 (now fallback-only, see RT1), R2/R3 (optimize + route).
+- **I2, I5, S1, S2, S3, S5, S6, S7, S8, V10, R6, C2, C6, C7, C8-visual, all L-series,
+  all D-series interaction, D9, D10, RL1–RL4, N6, N7** → **Blocked by environment —
+  browser interaction unavailable** (not passed, not code-substituted).
+- **DEF-4** is upgraded from code-inspected to **Runtime verified** by RT1 (fallback path
+  observed directly).
+- **DEF-6** is **Runtime verified** by O7.
+- The **"no server-side maximum stops"** observation is **API verified** by O8.
+
+Confirmed defects **DEF-1, DEF-2, DEF-3, DEF-7** remain **Code inspected only — runtime
+behaviour not verified** in this environment: each requires browser interaction (a failed
+optimise with visible UI, editing/removing stops after calculation, a page refresh during
+driver mode, and rapid double-tap on the completion button). They are credible from code
+but were **not** runtime-reproduced here and must not be counted as runtime-verified.
+
+## Operational notes (not defects)
+
+- **PowerShell `&&`:** chaining commands with `&&` fails in the available PowerShell
+  version (shell-syntax limitation). Commands were run separately or via `;`/script files.
+  This is an operational/shell note only and is **not** a SafeRoute application defect.
+- **TLS interception:** as above, the Node server cannot verify the Mapbox leaf
+  certificate in this environment. This blocks live Mapbox verification in-app but is an
+  environment condition, not an application defect.
+
+## Updated environment limitations (this run)
+
+In addition to the browser limitations already documented, this run adds:
+
+- **Live Mapbox in-app calls are blocked** by a Node TLS certificate-chain failure
+  (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`). Only fallback (`/api/route`) and error
+  (`/api/geocode-batch`, `/api/directions`) paths were runtime-observable. The live
+  geocoding/directions happy path through the app is **Blocked by environment (TLS)** and
+  was only confirmed out-of-process via the OS trust store.
+- Consequently, C7 ("road vs fallback distinguishable") and the geocode "address not
+  found" branch could not be exercised through the running app in this session.
+
+---
+
+# Phase 2A continuation (2) — reused server, expanded API matrix (2026-07-13, later)
+
+> Second continuation, same day. The **existing** `npm run dev` process was reused (not
+> restarted). No source code was modified; nothing was staged or committed. Evidence types
+> per row: `Runtime verified — API`, `Runtime verified — server log`, `Code inspected only`,
+> `Blocked by environment`, `Not tested`. Source inspection alone never yields a Pass.
+
+## 1. Environment values (protected)
+
+- **`.env.local`:** present. Its contents were **not** printed, copied, returned, or
+  modified, and no token fragment is reproduced anywhere in this report.
+- **Required variable — `NEXT_PUBLIC_MAPBOX_TOKEN`:** **Present** (name confirmed in
+  `.env.local` via a name-only match; value never read). The `NEXT_PUBLIC_` prefix means it
+  is **client-visible** (embedded in the browser bundle) and also read server-side in
+  `src/lib/mapbox.ts`. It is referenced in both client code (`search.ts`, `MapView`,
+  `DriverMapView`, `TrackingMapView`, `TripPanel`) and server code.
+- **Optional variable — `MAPBOX_SECRET_TOKEN`:** documented in `.env.example` but commented
+  out and not required; treated as **Missing / optional**.
+- **Runtime access + live Mapbox:** **Present and runtime-verified this pass.** Live
+  server-side Mapbox calls returned real data (geocode coordinates, a road polyline, and
+  turn-by-turn directions), so the app can access the token and reach Mapbox — **but only
+  intermittently** (see the finding in the first continuation: the same server failed all
+  Mapbox calls on the prior pass). Classification: **Present and runtime-verified, with
+  intermittent connectivity.** Existence of `.env.local` was **not** treated as proof of
+  validity — validity was established only by observed live responses.
+
+## 2. Reused development server
+
+- Process **PID 5952** confirmed **alive** (`Get-Process`); not restarted.
+- **Bound URL:** `http://localhost:3000`  •  **Port:** `3000`  •  Network host also bound.
+- **Startup:** success — "Ready in ~1.7s" (from the server log this session).
+- **Compilation errors:** none.  **Warnings:** none observed this session.
+- **Runtime errors:** only the earlier intermittent Mapbox TLS 500s (first continuation);
+  none in this pass.
+- **Repeated logs / request loops:** none — each HTTP request appears exactly once in the
+  server log; no retry storms.
+- **Root HTTP check (Runtime verified — API):** `GET http://localhost:3000/` →
+  **HTTP 200**, HTML returned (~30 KB), body contains `/_next/` and `<html`, i.e. it is a
+  **Next.js** application response. (A 200 proves the server responds; it does **not**
+  prove the browser UI renders.)
+
+## 3. Browser-capability check (performed now)
+
+| Capability | Available? | Evidence or limitation |
+| ---------- | ---------- | ---------------------- |
+| Load the local application in a real browser | **No** | No browser or browser-automation tool is exposed to the agent (only a GitLens MCP server). |
+| Interact with page controls | **No** | No DOM/input channel. |
+| View browser console | **No** | Cannot read client console output. |
+| Inspect network requests | **No** | Only server-side request logs are available, not the browser network panel. |
+| Inspect localStorage | **No** | No browser context. |
+| Resize or emulate viewports | **No** | No rendering/emulation surface. |
+| Control or simulate geolocation permission | **No** | `navigator.geolocation` cannot be driven here. |
+| Capture screenshots | **No** | No browser/display to capture. |
+
+**Statement:** Cursor has **no interactive-browser or browser-automation capability** in
+this environment. All browser-dependent scenarios are therefore
+**`Blocked by environment — no interactive browser or browser automation available`**.
+Terminal HTTP requests are **not** counted as browser interaction, and browser success was
+**not** inferred from compilation, API responses, HTML retrieval, or existing components.
+
+## 4–7. Expanded API results (all `Runtime verified — API`, corroborated by server log)
+
+Requests used synthetic/public Melbourne-area coordinates and public place names only.
+No tokens, driver coordinates, or passenger data are included; returned coordinate lists
+and polylines are summarized rather than reproduced.
+
+### `/api/optimize` (POST)
+
+| ID | Sanitised request | Status | Sanitised response | Mapbox? | Contract match | Note |
+| -- | ----------------- | ------ | ------------------ | ------- | -------------- | ---- |
+| OPT-01 | origin + 3 valid stops | 200 | `orderedStopIds:[c,b,a]`, `totalDistanceKm:24.41` | No | Yes | NN ordering |
+| OPT-02 | no origin | 400 | `origin coordinates required` | No | Yes | |
+| OPT-03 | no stops | 400 | `stops array required` | No | Yes | |
+| OPT-04 | `stops:[]` | 200 | `orderedStopIds:[]`, `0` | No | Yes | empty success |
+| OPT-05 | one valid stop | 200 | `[a]`, `18.63` | No | Yes | |
+| OPT-06 | duplicate stop coords | 200 | `[a,b]` (both kept) | No | Yes | **no de-duplication** |
+| OPT-07 | stop coords as strings `"abc"` | 200 | `[a]`, `totalDistanceKm:null` | No | **No** | **invalid coordinate types accepted → NaN→`null`** (not rejected, not filtered) |
+| OPT-08 | stop coords `1e400` (→ Infinity) | 200 | `[a]`, `totalDistanceKm:null` | No | **No** | **non-finite coords accepted → `null`** |
+| OPT-09a | origin `{lat:0,lng:0}` | 400 | `origin coordinates required` | No | **No** | **DEF-6: valid 0,0 origin rejected** (truthiness) |
+| OPT-09b | one stop `{lat:0,lng:0}` + one valid | 200 | `[b]` (the 0,0 stop **dropped**) | No | **No** | **DEF-6: valid 0,0 stop silently removed** |
+| OPT-10 | 16 stops | 200 | all 16 ids returned | No | **No cap** | **no server-side max-stop limit** |
+| OPT-11 | 2 valid + 1 no-coords | 200 | `[c,a]` (invalid dropped) | No | Partial | **invalid stops silently removed** |
+| OPT-12 | all invalid stops | 200 | `orderedStopIds:[]`, `0` | No | Partial | empty success for all-invalid input |
+
+### `/api/geocode-batch` (POST) — contract `addresses:{id,address}[]`
+
+| ID | Sanitised request | Status | Sanitised response | Mapbox? | Note |
+| -- | ----------------- | ------ | ------------------ | ------- | ---- |
+| GEO-01 | 2 valid public addresses | 200 | both `success:true` w/ real coords | **Yes (live OK)** | live geocode verified this pass |
+| GEO-02 | `addresses:[]` | 200 | `results:[]` | No | |
+| GEO-03 | body `{}` | 400 | `addresses array required` | No | |
+| GEO-04 | `addresses:"..."` (string) | 400 | `addresses array required` | No | **array type enforced** |
+| GEO-05 | one empty-string address | 200 | `success:false, "API error: 400"` | Yes | Mapbox rejects empty query |
+| GEO-06 | whitespace-only address | 200 | `success:false, "Address not found"` | Yes | |
+| GEO-07 | nonsense address | 200 | `success:false, "Address not found"` | Yes | |
+| GEO-08 | duplicate address x2 | 200 | both `success:true`, identical coords | Yes | **no de-duplication** |
+| GEO-09 | 20 addresses (oversized) | 200 | 20 results returned | Yes | **no max-batch-size / no length cap enforced** |
+
+Partial-failure semantics: the endpoint returns **200** with a per-address `success` flag;
+some entries can fail while others succeed. No array-length cap, no per-address length cap.
+
+### `/api/route` (POST) — road vs fallback distinction
+
+| ID | Sanitised request | Status | Sanitised response | Result kind | Note |
+| -- | ----------------- | ------ | ------------------ | ----------- | ---- |
+| RTE-01 | origin + 2 stops + order | 200 | **non-empty polyline**, legs `22.64` + `12.29` km, `34.93` km / `56.71` min | **Road (Mapbox)** | live road data verified this pass |
+| RTE-02 | no origin | 400 | `origin coordinates required` | Error | |
+| RTE-03 | no `orderedStopIds` | 400 | `stops and orderedStopIds required` | Error | |
+| RTE-04 | origin coords as strings | 200 | `polyline:""`, legs `distanceKm:null` | **Fallback (degraded)** | **invalid coord types accepted → null metrics** (same class as OPT-07) |
+| RTE-05 | `orderedStopIds:[]` | 200 | `polyline:""`, empty legs, `0` | Empty | |
+
+**How road vs fallback is represented (Runtime verified by comparing both):** a **road**
+result carries a **non-empty `polyline`** and Mapbox-derived leg durations; a **fallback**
+result has **`polyline:""`** and durations exactly equal to `distanceKm ÷ 40 km/h × 60`.
+There is **no explicit flag** distinguishing them — this directly confirms **DEF-4**. A
+`200` alone does **not** imply Mapbox-derived data.
+
+### `/api/directions` (POST)
+
+| ID | Sanitised request | Status | Sanitised response | Mapbox? | Note |
+| -- | ----------------- | ------ | ------------------ | ------- | ---- |
+| DIR-01 | valid origin + destination | 200 | `success:true`, full geometry + turn-by-turn steps | **Yes (live OK)** | live directions verified this pass |
+| DIR-02 | no origin | 400 | `Invalid origin coordinates` | No | |
+| DIR-03 | no destination | 400 | `Invalid destination coordinates` | No | |
+| DIR-04 | origin coords as strings | 400 | `Invalid origin coordinates` | No | **correctly rejects non-numeric coords** |
+
+## 8. New / upgraded findings from this pass
+
+- **Validation asymmetry (new observation, candidate defect "DEF-8"):**
+  `/api/directions` correctly validates coordinates with `typeof … === 'number'` and returns
+  **400** for non-numeric input (DIR-04). By contrast, `/api/optimize` and `/api/route` use
+  truthiness checks (`!origin.lat`), so they **accept invalid coordinate types (strings,
+  Infinity) and return HTTP 200 with `totalDistanceKm: null` / null-metric legs**
+  (OPT-07, OPT-08, RTE-04) instead of rejecting them. This produces silent bad data and is
+  the same root pattern as DEF-6. Evidence: `Runtime verified — API`.
+- **DEF-6 upgraded to `Runtime verified — API`:** origin `0,0` rejected (OPT-09a) **and** a
+  stop at `0,0` silently dropped (OPT-09b).
+- **DEF-4 upgraded to `Runtime verified — API`:** having now captured **both** a live road
+  response (non-empty polyline) and a fallback response (`polyline:""`, 40 km/h durations),
+  the absence of any explicit fallback flag is confirmed at runtime.
+- **No server-side max-stop / max-batch limit — `Runtime verified — API`:** OPT-10 (16
+  stops) and GEO-09 (20 addresses) both processed fully; the 15-item limit is UI-only.
+- **Silent removal of invalid stops — `Runtime verified — API`:** OPT-11 dropped the
+  no-coordinate stop and returned a 200 with only the valid ids.
+- **No de-duplication — `Runtime verified — API`:** OPT-06 and GEO-08 keep duplicates.
+- **Mapbox connectivity is intermittent — `Runtime verified — server log`:** same server
+  failed all Mapbox calls (TLS) on the first pass and succeeded on this pass.
+
+## Confirmed API defects (from runtime API evidence)
+
+1. **DEF-6 (Low→Medium, confirmed):** valid `0` coordinates rejected/silently dropped in
+   `/api/optimize` and `/api/route` (truthiness validation). Runtime verified.
+2. **DEF-8 (candidate, Medium, confirmed at API level):** `/api/optimize` and `/api/route`
+   accept non-numeric / non-finite coordinates and return `200` with `null` metrics instead
+   of a `400`; `/api/directions` does this correctly. Runtime verified.
+3. **DEF-4 (Medium, confirmed):** road vs Haversine-fallback results are indistinguishable
+   in the `/api/route` response except for an empty polyline; no explicit flag. Runtime
+   verified.
+4. **Missing hardening (Medium):** no server-side maximum on stops (`/api/optimize`) or
+   batch size/length (`/api/geocode-batch`), and no de-duplication in either. Runtime
+   verified. (Business limits are UI-only, per the original matrix.)
+
+## Browser limitations (unchanged, restated for this pass)
+
+Every browser-dependent scenario — page/map rendering, autocomplete interaction,
+buttons/forms, loading/error states, geolocation permission (grant/deny/unavailable),
+driver-marker rendering, blank-map regression, render/calc loops, driver-mode interaction,
+stop completion, drawer open/close/scroll, refresh/persistence, localStorage inspection,
+responsive layouts (mobile/tablet/desktop), light/dark mode, browser console errors,
+client network-request repetition, keyboard navigation, touch-target usability — remains
+**`Blocked by environment — no interactive browser or browser automation available`**. The
+code-level confirmed defects **DEF-1, DEF-2, DEF-3, DEF-7** remain **`Code inspected only`**
+until exercised in a real browser.
+
+## Operational note (not a defect)
+
+The PowerShell in this environment does not support `&&` command chaining (a shell-syntax
+limitation). All commands were run as separate invocations or via `;`/script files. This is
+an operational note only and is **not** a SafeRoute application defect.
+
+---
+
+# Phase 2B — Confirmed API stabilisation and verification (2026-07-14)
+
+> Implementation phase. Only defects confirmed through Phase 2A **API runtime testing** were
+> fixed. No browser-only issues were changed. The original Phase 2A evidence above is left
+> intact. Branch: `fix/core-api-validation` (from `chore/release-baseline` @ `1290737`).
+> Node `v22.17.1`, npm `10.9.2`; Docker base image uses Node `20` (`node:20-slim`).
+
+## Defects addressed
+
+| Defect | Summary | Root cause | Status |
+| ------ | ------- | ---------- | ------ |
+| DEF-6 | Valid `0` coordinates rejected (origin) / silently dropped (stop) | Truthiness checks (`!origin.lat`) treat `0` as missing; stop filter used `s.coordinates.lat && .lng` | **Fixed** |
+| DEF-8 | Invalid/non-finite coordinate types accepted → `200` with `totalDistanceKm: null` | Truthiness checks accept strings/`Infinity`; no numeric validation | **Fixed** |
+| DEF-4 | Road vs Haversine-fallback route indistinguishable | Fallback flag never propagated to the client | **Fixed (API + minimal client label)** |
+| Missing limits | No server-side max stops / batch size; empty/malformed addresses not rejected; invalid stops silently removed | No server-side business validation | **Fixed** |
+
+## Root causes confirmed
+
+1. **Truthiness validation** in `/api/optimize` and `/api/route` (`!origin.lat`, and the
+   `s.coordinates.lat && s.coordinates.lng` stop filter) both (a) rejected/dropped the valid
+   value `0` and (b) accepted non-numeric / non-finite values, which then produced `NaN`
+   distances serialized as `null`.
+2. **No provenance field** on the `/api/route` response: a Haversine fallback used the same
+   shape as a Mapbox road result, distinguishable only by an empty polyline.
+3. **No server-side limits**: the 15-destination cap and geocode batch/length limits lived
+   only in the UI.
+
+## Files changed
+
+| File | Change |
+| ---- | ------ |
+| `src/lib/validation.ts` (new) | Shared `isFiniteNumber` / `isValidLatitude` / `isValidLongitude` / `isValidCoordinates` helpers (finite + range, accept `0`, reject strings/null/NaN/Infinity/arrays/objects). |
+| `src/lib/constants.ts` | Added `MAX_DESTINATIONS = 15` (single source of truth; `MAX_STOPS` now aliases it) and `MAX_ADDRESS_LENGTH = 250`. |
+| `src/types/index.ts` | Added `RouteSource` type; `RouteResponse` now includes `routeSource` + `isFallback`; `Route` carries optional `source`. |
+| `src/app/api/optimize/route.ts` | Numeric coordinate validation; validates every stop (rejects with `stopIndex`, no silent drop); enforces `MAX_DESTINATIONS`; preserves `0` and duplicates. |
+| `src/app/api/route/route.ts` | Same coordinate validation + `MAX_DESTINATIONS`; returns `routeSource`/`isFallback`; never returns `200` with `null`/`NaN` metrics. |
+| `src/app/api/geocode-batch/route.ts` | Validates array type, non-empty, ≤15, per-entry `{id, address}` with non-empty trimmed string ≤250 chars — all **before** any Mapbox call; preserves order + duplicates. |
+| `src/app/api/directions/route.ts` | Reuses `isValidCoordinates` for origin/destination/waypoints (preserves its verified `400` behaviour, additionally rejects NaN/Infinity/out-of-range). |
+| `src/components/trip/TripPanel.tsx` | Stores `routeSource` from each `/api/route` response onto the `Route`. |
+| `src/components/results/RouteComparison.tsx` | Minimal, non-redesign fallback banner shown only when a route's source is `haversine-fallback`. |
+
+**Untouched (protected):** `Dockerfile`, `docker-compose.yml`, `src/app/layout.tsx`,
+`tailwind.config.js` — not edited, staged, committed, reverted, stashed, or formatted.
+
+## Request-contract changes
+
+- `/api/optimize`, `/api/route`: invalid coordinates now return **`400`** with
+  `{ error, code, details?: { stopIndex } }` (previously accepted or produced `null`).
+  Max 15 destinations enforced (`TOO_MANY_DESTINATIONS`). Origin is a separate field and is
+  never counted as a destination.
+- `/api/route` success responses gain **`routeSource: 'mapbox' | 'haversine-fallback' | 'none'`**
+  and **`isFallback: boolean`**. Existing fields (`polyline`, `legs`, `totalDistanceKm`,
+  `totalDurationMinutes`) are unchanged.
+- `/api/geocode-batch`: now returns **`400`** (before calling Mapbox) for non-array,
+  empty array, >15 entries, non-object entries, missing/empty id, non-string/empty/too-long
+  address. **Contract note:** the real request shape is `addresses: {id, address}[]` (not a
+  bare string array as the Phase 2B brief assumed); validation was implemented against the
+  actual contract. Empty array now returns `400` (`EMPTY_BATCH`) rather than `200 {results:[]}`;
+  the client never sends an empty batch, so no UI behaviour changes.
+- Duplicate destinations/addresses are **preserved** everywhere (no dedupe added).
+
+## Before-and-after API results (Runtime verified — API, 2026-07-14)
+
+Server reused: `npm run dev`, `http://localhost:3000`. Mapbox was **live** during this run,
+so both route sources were observed directly.
+
+### `/api/optimize`
+
+| Case | Before (Phase 2A) | After (Phase 2B) |
+| ---- | ----------------- | ---------------- |
+| Valid multi | 200 ordered | 200 ordered (unchanged) |
+| Origin `lat:0,lng:0` | **400** (DEF-6) | **200 accepted** |
+| Stop `lat:0,lng:0` | **silently dropped** (DEF-6) | **200, stop preserved** |
+| Missing origin | 400 | 400 `INVALID_ORIGIN` |
+| Missing stops | 400 | 400 `INVALID_STOPS` |
+| Empty stops | 200 empty | 200 empty (unchanged) |
+| One stop | 200 | 200 |
+| Duplicate stops | 200 both | 200 both (preserved) |
+| Numeric-string coords | **200, `null`** (DEF-8) | **400 `INVALID_COORDINATES` stopIndex 0** |
+| `null` coords | 200 (dropped) | **400 stopIndex 0** |
+| Latitude out of range (100) | 200 accepted | **400 stopIndex 0** |
+| Longitude out of range (200) | 200 accepted | **400 stopIndex 0** |
+| Mixed valid/invalid | **200, invalid dropped** | **400 stopIndex 1** (no silent drop) |
+| All invalid | 200 empty | **400 stopIndex 0** |
+| Exactly 15 | 200 | 200 |
+| 16 stops | **200 (no cap)** | **400 `TOO_MANY_DESTINATIONS` {max:15,received:16}** |
+
+### `/api/route`
+
+| Case | Before | After |
+| ---- | ------ | ----- |
+| Valid | 200, no source field | **200 `routeSource:mapbox`, `isFallback:false`**, polyline present |
+| Coord `0` (origin 0,0 → unroutable by road) | n/a | **200 `routeSource:haversine-fallback`, `isFallback:true`**, finite km (fallback correctly labelled, not called road) |
+| Numeric-string coords | **200, `null`** | **400 `INVALID_ORIGIN`** |
+| `null` coords | 200, `null` | **400 stopIndex 0** |
+| Out-of-range coords | 200 | **400 stopIndex 0** |
+| Duplicate destinations | 200 | **200 `routeSource:mapbox`** (preserved) |
+| Exactly 15 | 200 | 200, 15 legs, `routeSource:mapbox` |
+| 16 stops | 200 (no cap) | **400 `TOO_MANY_DESTINATIONS`** |
+
+All successful numeric fields were finite; **no `null`/`NaN`/Infinity** distances observed.
+
+### `/api/geocode-batch`
+
+| Case | Before | After |
+| ---- | ------ | ----- |
+| Valid array | 200 | 200 (1 success) |
+| Empty array | 200 `{results:[]}` | **400 `EMPTY_BATCH`** |
+| Missing `addresses` | 400 | 400 `INVALID_ADDRESSES` |
+| Non-array `addresses` | 400 | 400 `INVALID_ADDRESSES` |
+| Empty string | 200 (Mapbox 400 per item) | **400 `EMPTY_ADDRESS` index 0** (before Mapbox) |
+| Whitespace-only | 200 "Address not found" | **400 `EMPTY_ADDRESS` index 0** |
+| Non-string entry | 200 (garbage query) | **400 `INVALID_ADDRESS` index 0** |
+| Address > 250 chars | 200 | **400 `ADDRESS_TOO_LONG` {index:0,max:250}** |
+| Duplicate addresses | 200 both | 200 both (preserved) |
+| Exactly 15 | 200 | 200 (15 success) |
+| 16 addresses | 200 (no cap) | **400 `TOO_MANY_ADDRESSES`** (before Mapbox) |
+
+## Validation results
+
+| Check | Command | Result |
+| ----- | ------- | ------ |
+| Lint | `npm run lint` | **Pass** — 0 errors (6 pre-existing warnings in untouched files/config; none introduced) |
+| Type check | `npm run typecheck` | **Pass** — no errors |
+| Production build | `npm run build` | **Pass** — compiled; all four `/api/*` routes emitted as dynamic functions |
+
+No check was weakened. No insecure TLS setting was added.
+
+## Client presentation
+
+`Code implemented and build-verified — browser runtime not verified.` The fallback banner
+("Straight-line estimate — road routing temporarily unavailable…") is rendered in
+`RouteComparison` only when a route's `source` is `haversine-fallback`. Because Cursor has
+**no interactive browser or browser automation**, its on-screen rendering was **not**
+verified in a browser and is not claimed to be.
+
+## Remaining browser-blocked scenarios (unchanged, not addressed in 2B)
+
+`Blocked by environment — no interactive browser or browser automation available`:
+silent optimise failure in the UI (DEF-1), stale route display (DEF-2), refresh-state loss
+(DEF-3), double-tap stop completion (DEF-7), blank map, drawer scrolling, responsive layout,
+light/dark mode, geolocation behaviour. These require browser or end-to-end evidence.
+
+## Mapbox TLS environment limitation
+
+Phase 2A saw intermittent `UNABLE_TO_VERIFY_LEAF_SIGNATURE` (Node cannot verify the leaf
+certificate) on server-side Mapbox calls; the 2026-07-14 run succeeded live. This is treated
+as an **environment / certificate-chain limitation, not an application defect**. No TLS
+verification was disabled, no `NODE_TLS_REJECT_UNAUTHORIZED=0`, no npm `strict-ssl=false`,
+and the Docker TLS workaround was not modified. The app's safe Haversine fallback continues
+to cover Mapbox unavailability (and is now explicitly labelled).
+
+## Known compatibility risks
+
+- **Node version drift:** local Node `v22` vs Docker Node `20` — unchanged by this phase;
+  worth a container parity check later.
+- **`/api/geocode-batch` empty-array now returns `400`** (was `200 {results:[]}`). The
+  current UI never sends an empty batch, but any external caller relying on the old empty-OK
+  behaviour would now receive `400`.
+- **Stricter coordinate validation** may reject previously-tolerated malformed payloads from
+  any non-UI API caller (by design).
