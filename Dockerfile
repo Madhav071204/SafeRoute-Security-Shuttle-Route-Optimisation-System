@@ -3,28 +3,30 @@
 # ==============================================================================
 # SafeRoute — production Dockerfile (multi-stage)
 # ==============================================================================
-# Stage 1 (base):    Shared Node.js Alpine image for all stages
+# Stage 1 (base):    Shared Node.js image for all stages
 # Stage 2 (deps):    Install npm dependencies from the lockfile
 # Stage 3 (builder): Compile the Next.js production build
 # Stage 4 (runner):  Minimal runtime image — only what is needed to serve the app
 # ==============================================================================
 
 # --- Stage 1: base -----------------------------------------------------------
-# Alpine keeps images small. Node 20 matches the LTS version used in CI.
-FROM node:20-alpine AS base
+# Node 20 matches CI. Slim (Debian) avoids Alpine TLS issues on some Docker Desktop setups.
+FROM node:20-slim AS base
 
 # --- Stage 2: deps -----------------------------------------------------------
 # Install dependencies in an isolated layer so Docker can cache them when only
 # application source code changes (not package.json / package-lock.json).
 FROM base AS deps
 
-# libc6-compat helps some native npm packages work on Alpine/musl.
-RUN apk add --no-cache libc6-compat
-
 WORKDIR /app
 
 # Copy only manifest files first — maximises layer-cache hits on rebuilds.
 COPY package.json package-lock.json ./
+
+# Optional: set INSECURE_NPM_SSL=true when a corporate proxy breaks TLS inside Docker.
+# Example: docker compose build --build-arg INSECURE_NPM_SSL=true
+ARG INSECURE_NPM_SSL=false
+RUN if [ "$INSECURE_NPM_SSL" = "true" ]; then npm config set strict-ssl false; fi
 
 # npm ci installs exact versions from the lockfile (reproducible builds).
 RUN npm ci
@@ -46,10 +48,13 @@ RUN mkdir -p public
 ARG NEXT_PUBLIC_MAPBOX_TOKEN
 ENV NEXT_PUBLIC_MAPBOX_TOKEN=$NEXT_PUBLIC_MAPBOX_TOKEN
 
+ARG INSECURE_NPM_SSL=false
+
 # Disable Next.js anonymous telemetry in CI and container builds.
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN npm run build
+# Allow Google Fonts download when a corporate proxy breaks TLS (same fix as npm ci).
+RUN if [ "$INSECURE_NPM_SSL" = "true" ]; then export NODE_TLS_REJECT_UNAUTHORIZED=0; fi && npm run build
 
 # --- Stage 4: runner ---------------------------------------------------------
 # Final image: no compiler, no devDependencies, no full node_modules tree.
@@ -61,8 +66,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Run as a non-root user — limits damage if the container is compromised.
-RUN addgroup --system --gid 1001 nodejs \
-  && adduser --system --uid 1001 nextjs
+RUN groupadd --system --gid 1001 nodejs \
+  && useradd --system --uid 1001 --gid nodejs nextjs
 
 # Standalone output includes server.js and traced production dependencies only.
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public

@@ -3,7 +3,7 @@
 # Quick start:
 #   1. cp .env.example .env.local
 #   2. Add your Mapbox token to .env.local
-#   3. docker compose up --build
+#   3. docker compose --env-file .env.local up --build
 #   4. Open http://localhost:3000
 #
 # Note: NEXT_PUBLIC_* variables are baked into the client bundle at image build
@@ -17,6 +17,8 @@ services:
       args:
         # Build-time arg — required for maps and geocoding in the browser bundle.
         NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN}
+        # Corporate proxies often break npm TLS inside Docker on Windows.
+        INSECURE_NPM_SSL: ${INSECURE_NPM_SSL:-true}
     image: saferoute:latest
     container_name: saferoute-app
     ports:
