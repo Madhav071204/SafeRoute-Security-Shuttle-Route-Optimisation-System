@@ -214,6 +214,7 @@ export function TripPanel() {
             totalDurationMinutes: fifoRoute.totalDurationMinutes || 0,
             estimatedFuelCostAud: 0,
           },
+          source: fifoRoute.routeSource,
         },
         {
           type: 'optimized',
@@ -225,6 +226,7 @@ export function TripPanel() {
             totalDurationMinutes: optimizedRoute.totalDurationMinutes || 0,
             estimatedFuelCostAud: 0,
           },
+          source: optimizedRoute.routeSource,
         }
       )
     } catch (error) {
