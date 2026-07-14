@@ -29,8 +29,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          # Node 20 is the current LTS; the repo requires Node 18+.
-          node-version: 20
+          # Node 22 matches local verification, Docker production image, and engines.
+          node-version: 22
           cache: npm
 
       # Deterministic, reproducible install from the committed lockfile.
@@ -85,7 +85,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
