@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react'
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import { Trip, Stop, Route, ExecutionState, Coordinates, DriverLocation, TrackingMode, ActiveNavigationState, DirectionRoute, RouteOrigin, OriginSource } from '@/types'
 import { MONASH_FALLBACK_ORIGIN } from '@/lib/constants'
 import { generateStopId } from '@/data/demo'
@@ -110,6 +110,18 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
   const [isOptimizing, setIsOptimizing] = useState(false)
   const [originSource, setOriginSource] = useState<OriginSource>('fallback_monash')
 
+  // Re-entrancy guard for stop completion (DEF-7). Set synchronously when a
+  // completion begins and released once the execution state has advanced.
+  const completionLockRef = useRef(false)
+
+  // Any change to the route-defining inputs (which stops exist, their address
+  // or their coordinates) must invalidate a previously computed route so the
+  // user can never start a route that no longer matches the entered
+  // destinations (DEF-2).
+  const invalidateRoutes = useCallback(() => {
+    setRoutesState({ fifo: null, optimized: null })
+  }, [])
+
   const addStop = useCallback(() => {
     setTrip((prev) => ({
       ...prev,
@@ -125,7 +137,8 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       ],
       status: 'input',
     }))
-  }, [])
+    invalidateRoutes()
+  }, [invalidateRoutes])
 
   const removeStop = useCallback((id: string) => {
     setTrip((prev) => ({
@@ -133,7 +146,8 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       stops: prev.stops.filter((s) => s.id !== id),
       status: 'input',
     }))
-  }, [])
+    invalidateRoutes()
+  }, [invalidateRoutes])
 
   const updateStop = useCallback((id: string, updates: Partial<Stop>) => {
     setTrip((prev) => ({
@@ -141,7 +155,12 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       stops: prev.stops.map((s) => (s.id === id ? { ...s, ...updates } : s)),
       status: 'input',
     }))
-  }, [])
+    // Only a change to a route-defining field invalidates the route; editing a
+    // passenger name alone leaves an existing route intact.
+    if ('address' in updates || 'coordinates' in updates) {
+      invalidateRoutes()
+    }
+  }, [invalidateRoutes])
 
   const clearTrip = useCallback(() => {
     setTrip(createEmptyTrip())
@@ -261,6 +280,15 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     const selectedRoute = selectedRouteType === 'fifo' ? routes.fifo : routes.optimized
     if (!selectedRoute) return
 
+    // Guard against a second activation firing before the current completion
+    // has committed (rapid double-click / repeated activation). Without this,
+    // two calls in the same batch would each advance the index and silently
+    // skip a stop, or run the final completion twice (DEF-7). The lock is
+    // released by an effect once the execution state has advanced, so it does
+    // not rely on an arbitrary timeout.
+    if (completionLockRef.current) return
+    completionLockRef.current = true
+
     setExecutionState((prev) => {
       const currentStopId = selectedRoute.orderedStopIds[prev.currentStopIndex]
       const newCompletedIds = [...prev.completedStopIds, currentStopId]
@@ -299,6 +327,12 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       }
     })
   }, [routes, selectedRouteType, originSource])
+
+  // Release the completion re-entrancy guard once the execution state has
+  // actually advanced (index moved or a stop was recorded as completed).
+  useEffect(() => {
+    completionLockRef.current = false
+  }, [executionState.currentStopIndex, executionState.completedStopIds.length])
 
   const endExecution = useCallback(() => {
     clearTrip()

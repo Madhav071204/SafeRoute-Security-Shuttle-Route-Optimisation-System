@@ -589,6 +589,7 @@ export function DriverMapView({
           whileTap={{ scale: 0.98 }}
           onClick={handleRecenter}
           disabled={!driverLocation}
+          aria-label="Follow my location"
           className={clsx(
             'glass-button flex items-center gap-2',
             trackingMode === 'follow' && 'active',
@@ -606,6 +607,7 @@ export function DriverMapView({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={handleShowOverview}
+          aria-label="Show full route overview"
           className={clsx(
             'glass-button flex items-center gap-2',
             trackingMode === 'overview' && 'active'

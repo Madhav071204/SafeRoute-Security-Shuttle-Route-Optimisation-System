@@ -18,8 +18,15 @@ const config = nextCoreWebVitals.map((entry) => {
 
 export default [
   ...config,
-  // Project-specific ignores (in addition to Next defaults).
+  // Project-specific ignores (in addition to Next defaults). Generated test
+  // output (coverage reports, Playwright artifacts) is never linted.
   {
-    ignores: ['.next/**', 'node_modules/**'],
+    ignores: [
+      '.next/**',
+      'node_modules/**',
+      'coverage/**',
+      'test-results/**',
+      'playwright-report/**',
+    ],
   },
 ]
