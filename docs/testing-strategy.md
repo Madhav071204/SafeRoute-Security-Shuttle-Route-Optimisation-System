@@ -219,14 +219,18 @@ token** — the build compiles without one (the map degrades to a notice), so
 missing Mapbox credentials never fail deterministic tests. No secret placeholder
 is required for compilation. TLS verification is never disabled.
 
+**Runtime parity:** CI, Docker, and `package.json` engines target **Node 22**.
+Local Playwright defaults to the OS Chrome channel; CI installs bundled Chromium
+via `PLAYWRIGHT_CHANNEL=chromium`.
+
 **Standalone-output handling:** the production/Docker build keeps
 `output:'standalone'`; the E2E job builds with `NEXT_DISABLE_STANDALONE=1` so
 `next start` runs without the standalone warning (Option 2 — a dedicated
 warning-free test build that does not alter the production configuration).
 
 **Known CI gaps:** only Chromium runs (no Firefox/WebKit); coverage is not
-gated; the workflow was validated locally by YAML parse only (no live Actions
-run or `actionlint` available in this environment).
+gated. Live GitHub Actions must be treated as the source of truth for CI
+behaviour (YAML alone is not proof).
 
 ## Remaining manual validation
 
