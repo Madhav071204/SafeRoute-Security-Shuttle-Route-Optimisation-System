@@ -5,9 +5,9 @@ on:
     branches:
       - main
       - develop
+  # Run on every pull request regardless of base branch so stacked review
+  # branches (e.g. test/* → fix/*) are validated too.
   pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Lint • Typecheck • Build
+  validate:
+    name: Lint • Typecheck • Test • Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -29,109 +29,90 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          # This repo docs require Node 18+. Node 20 is the current LTS.
+          # Node 20 is the current LTS; the repo requires Node 18+.
           node-version: 20
+          cache: npm
 
-      - name: Detect package manager
-        id: pm
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f pnpm-lock.yaml ]; then
-            echo "manager=pnpm" >> "$GITHUB_OUTPUT"
-            echo "lockfile=pnpm-lock.yaml" >> "$GITHUB_OUTPUT"
-          elif [ -f yarn.lock ]; then
-            echo "manager=yarn" >> "$GITHUB_OUTPUT"
-            echo "lockfile=yarn.lock" >> "$GITHUB_OUTPUT"
-          elif [ -f package-lock.json ]; then
-            echo "manager=npm" >> "$GITHUB_OUTPUT"
-            echo "lockfile=package-lock.json" >> "$GITHUB_OUTPUT"
-          else
-            echo "No lockfile found. Please commit a lockfile for reproducible CI installs." >&2
-            exit 1
-          fi
-
-      - name: Cache dependencies (npm)
-        if: steps.pm.outputs.manager == 'npm'
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
-
-      - name: Cache dependencies (yarn)
-        if: steps.pm.outputs.manager == 'yarn'
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/yarn
-            .yarn/cache
-          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
-
-      - name: Cache dependencies (pnpm)
-        if: steps.pm.outputs.manager == 'pnpm'
-        uses: actions/cache@v4
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
+      # Deterministic, reproducible install from the committed lockfile.
       - name: Install dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f pnpm-lock.yaml ]; then
-            corepack enable
-            pnpm install --frozen-lockfile
-          elif [ -f yarn.lock ]; then
-            corepack enable
-            yarn install --frozen-lockfile
-          else
-            npm ci
-          fi
+        run: npm ci
 
-      - name: Detect scripts
-        id: scripts
-        shell: bash
-        run: |
-          node <<'NODE'
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          const scripts = pkg.scripts || {};
-
-          const has = (name) =>
-            typeof scripts[name] === 'string' && scripts[name].trim().length > 0;
-          const isPlaceholderTest = (cmd) =>
-            typeof cmd === 'string' &&
-            /no test specified/i.test(cmd) &&
-            /echo/i.test(cmd);
-
-          const hasLint = has('lint');
-          const hasTypecheck = has('typecheck');
-          const testCmd = scripts.test;
-          const runTests = has('test') && !isPlaceholderTest(testCmd);
-
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_lint=${hasLint}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_typecheck=${hasTypecheck}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `run_tests=${runTests}\n`);
-          NODE
-
+      # The following steps are all mandatory: a failure in any of them fails
+      # CI. There is no longer any logic that skips tests when the script is
+      # "absent" — the test scripts exist and must run.
       - name: Lint
-        if: steps.scripts.outputs.has_lint == 'true'
         run: npm run lint
 
       - name: TypeScript typecheck
-        if: steps.scripts.outputs.has_typecheck == 'true'
         run: npm run typecheck
 
-      - name: Tests
-        if: steps.scripts.outputs.run_tests == 'true'
+      - name: Unit, API and component tests
         run: npm test
 
+      # Coverage is generated as a NON-BLOCKING, informational step. It is not a
+      # gate yet because coverage is intentionally scoped to core logic only
+      # (see docs/testing-strategy.md). `continue-on-error` keeps a low coverage
+      # number from failing CI while still surfacing the report in the log.
+      - name: Coverage report (non-blocking)
+        run: npm run test:coverage
+        continue-on-error: true
+
+      # Production build must succeed. This uses the real deployment
+      # configuration (output: 'standalone'); no Mapbox token is required to
+      # compile (the map degrades gracefully to a configuration notice).
       - name: Production build
         run: npm run build
 
+  e2e:
+    name: Browser tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only run browser tests once the primary validation job has passed.
+    needs: validate
+
+    env:
+      # Use Playwright's bundled Chromium in CI (the browser CDN is reachable
+      # here) instead of the OS Chrome channel used locally.
+      PLAYWRIGHT_CHANNEL: chromium
+      # Build a warning-free server that `next start` fully supports. This does
+      # NOT change the production/Docker build, which keeps output: 'standalone'.
+      NEXT_DISABLE_STANDALONE: '1'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Install only the Chromium browser plus its OS dependencies. Firefox and
+      # WebKit are intentionally not installed in this phase.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Build the production-compatible server the local E2E config expects.
+      # No real Mapbox token is provided; the deterministic mocks intercept all
+      # /api/* calls and the map degrades to a visible configuration notice.
+      - name: Build application (test server)
+        run: npm run build
+
+      - name: Run Playwright tests
+        run: npm run test:e2e
+
+      # Upload the HTML report / traces / screenshots only when something fails.
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore

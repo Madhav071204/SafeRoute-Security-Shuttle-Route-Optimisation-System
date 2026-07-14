@@ -8,6 +8,17 @@ import { defineConfig, devices } from '@playwright/test'
 const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3123)
 const BASE_URL = `http://127.0.0.1:${PORT}`
 
+// Which browser binary to drive. Locally we default to the OS-installed Chrome
+// (`chrome` channel) because the sandbox blocks Playwright's browser CDN behind
+// a TLS-intercepting proxy. In CI the CDN is reachable, so we install and use
+// Playwright's bundled Chromium by setting PLAYWRIGHT_CHANNEL=chromium (which
+// disables the channel override). TLS verification is never disabled.
+const CHANNEL = process.env.PLAYWRIGHT_CHANNEL ?? 'chrome'
+const CHROMIUM_USE =
+  CHANNEL === 'chromium' || CHANNEL === 'bundled'
+    ? { ...devices['Desktop Chrome'] }
+    : { ...devices['Desktop Chrome'], channel: CHANNEL }
+
 export default defineConfig({
   testDir: './e2e',
   // Core deterministic tests mock external Mapbox calls, so a single worker
@@ -18,7 +29,9 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   timeout: 60_000,
   expect: { timeout: 15_000 },
-  reporter: [['list']],
+  // `list` for readable console output; `html` (never auto-opened) produces a
+  // report that CI uploads as an artifact when the browser suite fails.
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: BASE_URL,
     headless: true,
@@ -29,11 +42,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      // Drive the OS-installed Chrome ("chrome" channel) rather than a
-      // downloaded Chromium build. The sandboxed environment blocks Playwright's
-      // browser CDN behind a TLS-intercepting proxy, and we must not disable TLS
-      // verification. Using the system browser keeps the suite runnable safely.
-      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      use: CHROMIUM_USE,
     },
   ],
   webServer: {
