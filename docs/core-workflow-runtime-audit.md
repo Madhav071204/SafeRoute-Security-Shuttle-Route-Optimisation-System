@@ -978,3 +978,79 @@ to cover Mapbox unavailability (and is now explicitly labelled).
   behaviour would now receive `400`.
 - **Stricter coordinate validation** may reject previously-tolerated malformed payloads from
   any non-UI API caller (by design).
+
+---
+
+# Phase 3 — Automated testing evidence (2026-07-14)
+
+Phase 3 adds the project's first automated tests (Vitest + Playwright). This section records
+what is now verified through automation. It does **not** replace or erase Phase 2A/2B evidence.
+
+## Test suite summary
+
+| Layer | Tool | Files | Tests | Result |
+| ----- | ---- | ----- | ----- | ------ |
+| Unit (algorithms + validation) | Vitest (node) | 3 | 36 | **Pass** |
+| API / integration (`/api/*`) | Vitest (node) | 4 | 42 | **Pass** |
+| Component (RouteComparison) | Vitest (jsdom) | 1 | 5 | **Pass** |
+| Browser E2E | Playwright (Chrome channel) | 5 | 9 | **Pass** (8 pass + 1 expected-fail) |
+
+- `npm test`: **83 passed / 0 failed** (8 files).
+- `npm run test:coverage`: statements **44.69%**, branches **35.76%**, functions **43.52%**,
+  lines **44.77%**. Coverage is scoped to `src/lib/**`, `src/app/api/**`,
+  `src/components/results/**`. Core algorithms are **100%**; API routes **74–88%**.
+- `npm run test:e2e`: **9 passed** in Chromium via the OS Chrome channel, run against a
+  **production** `next start` server on port 3123.
+- `npm run lint`: **0 errors** (6 pre-existing warnings, none introduced).
+- `npm run typecheck`: **Pass**. `npm run build`: **Pass**.
+
+## Browser scenarios now verified through Playwright
+
+| Scenario | Evidence |
+| -------- | -------- |
+| Main route loads, no fatal error, trip planner visible | `smoke.spec.ts` — pass |
+| No obvious request/render loop on load | `smoke.spec.ts` (bounded request count) — pass |
+| Primary controls reachable + keyboard focus (mobile & desktop) | `responsive.spec.ts` — pass |
+| No horizontal overflow (desktop) | `responsive.spec.ts` — pass |
+| Geolocation denied → app does not crash, campus fallback used | `geolocation.spec.ts` — pass |
+| Geolocation granted (synthetic coords) → app not blank, no request loop | `geolocation.spec.ts` — pass |
+| Haversine fallback shows the estimate notice | `route-fallback.spec.ts` — pass |
+| Mapbox result does **not** show the fallback notice | `route-fallback.spec.ts` — pass |
+
+## Historical issue classification
+
+| ID / issue | Classification | Notes |
+| ---------- | -------------- | ----- |
+| Route fallback labelling (Mapbox vs Haversine) | **Reproduced & test added** | Covered at unit, component and E2E level. |
+| DEF-1 silent optimise failure | **Partially tested** | The optimise→route path completes and renders results with mocked APIs (E2E) and is covered at the API layer; the original *silent-failure* UI symptom could not be reproduced under these deterministic conditions. |
+| DEF-2 stale route after stop editing | **Still blocked** | Requires editing stops after optimisation and re-inspecting; needs deeper driver/edit flow automation not built this phase. |
+| DEF-3 refresh-state loss / persistence | **Not reproduced (as designed)** | In-memory `TripContext` intentionally resets on refresh; only completed trips persist to `localStorage`. No defect observed; documented as expected behaviour, not proof it can never occur. |
+| DEF-7 double activation of stop completion | **Still blocked** | Requires full driver-mode execution (Start Trip → mark complete twice); not automated this phase. |
+| Blank map after location permission | **Partially tested** | Geolocation granted/denied E2E shows the app does not go blank and does not loop; the *map tile* rendering itself is not asserted (map is not exercised headlessly). |
+| Upcoming-stops drawer scrolling | **Still blocked** | Driver-mode UI; requires execution flow automation. |
+| Mobile access to the final stop | **Still blocked** | Driver-mode UI; not automated. |
+| Repeated recalculation loop | **Partially tested** | Bounded request-count checks in smoke and geolocation-granted E2E give evidence of no runaway loop on the planning screen; navigation-mode recalculation is not exercised. |
+
+## New confirmed defects
+
+- **Mobile horizontal overflow (confirmed).** At a 390×844 viewport the document overflows
+  horizontally by ~400px because the top navigation does not collapse to a mobile menu. Captured
+  by `responsive.spec.ts` → "mobile has no horizontal overflow", which is marked `test.fail()`
+  (expected-to-fail) so the finding is tracked honestly without a UI redesign (out of Phase 3
+  scope). Desktop has no overflow.
+
+## Remaining manual-browser requirements
+
+- Visual/pixel correctness, animations and dark-mode styling.
+- Live Mapbox road-network rendering and on-map polyline.
+- Full driver-mode turn-by-turn navigation, off-route recalculation, and the upcoming-stops
+  drawer on real devices (covers DEF-2, DEF-7, drawer scrolling, mobile final-stop access).
+- Real-device geolocation accuracy/permission prompts.
+
+## Evidence classification (this phase)
+
+`Verified by automated test` for the unit/API/component/E2E rows above.
+`Environment limitation` for Playwright's browser CDN: the managed Chromium build could not be
+downloaded (`UNABLE_TO_VERIFY_LEAF_SIGNATURE` behind a TLS-intercepting proxy). No TLS
+verification was disabled; the suite instead drives the **OS-installed Chrome** via the `chrome`
+channel. Firefox/WebKit engines were not exercised.
