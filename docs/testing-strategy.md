@@ -50,7 +50,24 @@ and settings hooks are mocked so the test targets presentation, not wiring.
 `e2e/` (Playwright, Chromium) drives the running app in a real browser. All
 `/api/*` calls are intercepted with deterministic mocks, so E2E never touches
 live Mapbox. Covers: application smoke, responsive reachability, horizontal
-overflow, geolocation denied/granted, and route-fallback presentation.
+overflow (now a normal pass), geolocation denied/granted, route-fallback
+presentation, and — added in Phase 3B — the **complete driver execution
+journey** and driver-mode **regressions**:
+
+- `driver-journey.spec.ts` — one realistic plan → optimise → select → start →
+  driver mode → advance through every stop → completed-state journey, asserting
+  user-visible behaviour (current-stop advancement, `X/Y completed`, the
+  completed screen, and that no completion control remains enabled afterwards).
+- `driver-regressions.spec.ts` — DEF-2 (stale route invalidated after adding or
+  removing a stop), DEF-7 (a synchronous double activation cannot skip a stop),
+  drawer scrolling + final-stop reachability + End Trip access at 390×844,
+  refresh-resets-to-planner, and synthetic-geolocation stability (map container
+  visible, no blank page, no recalculation loop).
+- `e2e/fixtures/driverJourney.ts` — small reusable fixtures (`mockDriverApis`,
+  `planDemoRoute`, `startTripSkippingLocation`, `completeCurrentStop`,
+  `mockDirections` with a request counter) built on `mockApi.ts`. Only external
+  boundaries are mocked; React state, stop-completion, the drawer, persistence
+  and driver controls run for real.
 
 ### Manual testing still required
 - Visual/pixel correctness, animation quality and dark-mode styling.
@@ -111,14 +128,26 @@ per-defect classification (reproduced / not reproduced / partially / still
 blocked). Summary:
 
 - **Route fallback labelling** — reproduced and covered (unit, component, E2E).
-- **Blank page / render loop after load and after geolocation** — smoke and
-  geolocation E2E give evidence of no fatal error and no runaway request loop.
-- **Mobile horizontal overflow** — reproduced as a confirmed layout defect
-  (top navigation does not collapse at 390px width).
-- **Driver-mode defects** (DEF-2 stale route, DEF-3 refresh persistence, DEF-7
-  double stop-completion, drawer scrolling, mobile final-stop access) — require
-  full driver-mode execution and are only partially reachable without production
-  refactoring; classified honestly in the audit.
+- **Blank page / render loop after load and after geolocation** — smoke,
+  geolocation and driver-mode E2E give evidence of no fatal error and no runaway
+  request loop (driver-mode directions requests are counted and bounded).
+- **Mobile horizontal overflow** — reproduced, then **fixed** in Phase 3B (the
+  top navigation now collapses into a mobile menu below `md`). The former
+  expected-to-fail test is now a normal passing test.
+- **DEF-2 stale route after editing stops** — reproduced and **fixed**
+  (`TripContext` invalidates routes on stop add/remove/address change); E2E
+  regression added.
+- **DEF-7 double activation of stop completion** — reproduced and **fixed**
+  (re-entrancy guard in `markStopComplete`); E2E regression added.
+- **Drawer scrolling / mobile final-stop access** — exercised at 390×844; the
+  drawer scrolls and the final stop is reachable. The one real issue found was a
+  missing accessible name on the icon-only End Trip button (**fixed**).
+- **Refresh during an active trip** — the home-page flow intentionally resets to
+  a clean planner (in-memory state, no persistence); verified as the intended
+  contract, not data loss.
+
+See the Phase 3B section of `docs/core-workflow-runtime-audit.md` for the full
+driver-journey architecture map, reproduction details and fixes.
 
 ## Known testing gaps
 
@@ -126,11 +155,15 @@ blocked). Summary:
   `src/components/results/**`). Presentational, map, driver-mode, search and
   trip-history modules are exercised (if at all) via E2E, not coverage, so the
   aggregate coverage number is intentionally conservative.
-- Playwright Chromium binaries could not be downloaded in the sandbox (a
-  TLS-intercepting proxy blocks the browser CDN). The suite runs against the
-  **OS-installed Chrome** via the `chrome` channel instead; other browser engines
-  (Firefox/WebKit) are not exercised.
-- Driver-mode turn-by-turn navigation and map rendering are not automated.
+- Playwright Chromium binaries could not be downloaded in the local sandbox (a
+  TLS-intercepting proxy blocks the browser CDN). Locally the suite runs against
+  the **OS-installed Chrome** via the `chrome` channel; **in CI** the CDN is
+  reachable, so the workflow installs and uses Playwright's **bundled Chromium**
+  (`PLAYWRIGHT_CHANNEL=chromium`). The channel is configurable in
+  `playwright.config.ts`. Firefox/WebKit engines are not exercised in this phase.
+- Driver-mode turn-by-turn navigation is exercised end-to-end with mocked
+  directions, but **live Mapbox map-tile rendering** is not asserted (the map
+  degrades to a visible configuration notice when no token is present).
 
 ## How to run tests
 
@@ -153,13 +186,51 @@ hydration is deterministic (unlike dev mode) and `next start` coexists with a
 developer's `next dev` on :3000. Tests drive the OS-installed Chrome via the
 `chrome` channel; no browser binaries are committed.
 
-## CI integration recommendation
+Because the production build uses `output:'standalone'`, `next start` prints a
+harmless advisory warning. For a warning-free E2E build (used in CI) set
+`NEXT_DISABLE_STANDALONE=1` before building — e.g. on bash
+`NEXT_DISABLE_STANDALONE=1 npm run build`, on PowerShell
+`$env:NEXT_DISABLE_STANDALONE='1'; npm run build`. This omits only the
+standalone artifact and does not change the production/Docker deployment build.
 
-- Extend `.github/workflows/ci.yml` to run `npm test` (already auto-detected)
-  and `npm run test:coverage` on every PR — these are hermetic and fast.
-- Run Playwright as a separate job that installs Chromium via
-  `npx playwright install --with-deps chromium` on the CI runner (where the
-  browser CDN is reachable) and runs against a production build (`next build`
-  then `next start`) rather than dev mode, for stability.
-- Do not gate on live Mapbox; keep the deterministic mocks. Consider a small
-  coverage threshold only after coverage scope is expanded to more modules.
+## CI strategy (implemented — Phase 3B)
+
+`.github/workflows/ci.yml` runs two jobs on every pull request (any base branch)
+and on pushes to `main`/`develop`, with concurrency cancellation:
+
+- **`validate`** (mandatory, blocking): `npm ci` → `npm run lint` →
+  `npm run typecheck` → `npm test` → coverage (**non-blocking**,
+  `continue-on-error`, informational only) → `npm run build`. The old logic that
+  could silently skip tests when a test script was "absent" was removed — a
+  failed test now fails CI.
+- **`e2e`** (`needs: validate`): `npm ci` →
+  `npx playwright install --with-deps chromium` (Chromium only) →
+  `NEXT_DISABLE_STANDALONE=1 npm run build` → `npm run test:e2e`
+  (`PLAYWRIGHT_CHANNEL=chromium`) → upload `playwright-report/` + `test-results/`
+  **only on failure** (7-day retention).
+
+**Required checks:** lint, typecheck, unit/API/component tests, production build,
+and the Playwright browser job. **Coverage is not a blocking gate yet** (scope is
+core logic only); it is generated as an informational step.
+
+**External API isolation:** unit/API tests stub the global `fetch`; E2E
+intercepts every `/api/*` call. **CI needs no `.env.local` and no live Mapbox
+token** — the build compiles without one (the map degrades to a notice), so
+missing Mapbox credentials never fail deterministic tests. No secret placeholder
+is required for compilation. TLS verification is never disabled.
+
+**Standalone-output handling:** the production/Docker build keeps
+`output:'standalone'`; the E2E job builds with `NEXT_DISABLE_STANDALONE=1` so
+`next start` runs without the standalone warning (Option 2 — a dedicated
+warning-free test build that does not alter the production configuration).
+
+**Known CI gaps:** only Chromium runs (no Firefox/WebKit); coverage is not
+gated; the workflow was validated locally by YAML parse only (no live Actions
+run or `actionlint` available in this environment).
+
+## Remaining manual validation
+
+- Real Mapbox map-tile rendering and the live on-map polyline.
+- Real-device GPS accuracy, permission prompts, and off-route recalculation while moving.
+- Safari/iOS behaviour and Firefox/WebKit engines.
+- Touch behaviour on a physical phone; visual/pixel and dark-mode polish.

@@ -1054,3 +1054,152 @@ what is now verified through automation. It does **not** replace or erase Phase 
 downloaded (`UNABLE_TO_VERIFY_LEAF_SIGNATURE` behind a TLS-intercepting proxy). No TLS
 verification was disabled; the suite instead drives the **OS-installed Chrome** via the `chrome`
 channel. Firefox/WebKit engines were not exercised.
+
+---
+
+# Phase 3B — Driver workflow browser testing, confirmed fixes and CI (2026-07-14)
+
+Phase 3B exercises the **full driver execution journey** in a real headless browser,
+fixes only defects that were reproduced, and integrates the automated suites into CI. It
+does **not** erase Phase 2A/2B/3 evidence. Branch: `test/core-workflow-coverage` (base
+`fix/core-api-validation`). Environment: Node `v22.17.1`, Chromium via OS **Chrome**
+channel locally (Playwright bundled Chromium in CI), production `next start` on port 3123.
+
+## Driver workflow architecture (as mapped before changes)
+
+The prompt's journey (plan → start → driver mode → complete stops → completed) maps to the
+**home-page (`/`)** flow, not the dispatcher (`/driver`) flow:
+
+| Step | Where |
+| ---- | ----- |
+| Enter destinations | `TripPanel` → `StopList` → `StopInput` (`updateStop`/`addStop`/`removeStop` in `TripContext`) |
+| Geocode + optimise | `TripPanel.handleGeocode` → `/api/geocode-batch`; `handleOptimize` → `/api/optimize` + `/api/route` → `setRoutes` |
+| Compare / select route | `RouteComparison` → `setSelectedRouteType` (default `optimized`) |
+| Start trip | `TripPanel` "Start Trip" → location prompt → `startExecution()` (Use Location / Skip) → `trip.status='executing'` |
+| Driver mode | `page.tsx` renders `ExecutionView` → `DriverModeView` (+ `DriverMapView`, `useDriverLocation`, `/api/directions`) |
+| Current / upcoming stops | `CurrentStopCard` + `UpcomingStopsDrawer` |
+| Complete stop / advance | `markStopComplete` in `TripContext` (index++, records completed id) |
+| Final completion | `markStopComplete` completion branch → `status='completed'`, `saveCompletedTrip` (`localStorage`) |
+| End / clear | `endExecution` → `clearTrip` (in-memory reset) |
+| Dispatch variant | `/driver` (`useDriverTrip`, `dispatchTripRepository`) reused via the same `ExecutionView` with an `onStopAction` handler |
+
+On the home-page flow `onStopAction` is undefined, so completion uses the direct
+"Mark Arrived & Continue" control (`markStopComplete`). Without granted geolocation no
+`/api/directions` call is made and `CurrentStopCard` remains the completion control — the
+deterministic path used by the journey test.
+
+## Driver E2E coverage
+
+| Area | File | Result |
+| ---- | ---- | ------ |
+| Complete plan→driver→completed journey (8 stops), current-stop advancement, final completion, no invalid enabled controls | `e2e/driver-journey.spec.ts` | **Pass** |
+| DEF-2 add-stop invalidation / remove-stop invalidation | `e2e/driver-regressions.spec.ts` | **Pass** (fixed) |
+| DEF-7 single activation completes one stop / synchronous double activation cannot skip | `e2e/driver-regressions.spec.ts` | **Pass** (fixed) |
+| Drawer scroll + final-stop reachable + End Trip reachable + no horizontal trap (390×844) | `e2e/driver-regressions.spec.ts` | **Pass** (a11y fixed) |
+| Refresh during active trip → clean planner reset | `e2e/driver-regressions.spec.ts` | **Pass** |
+| Synthetic geolocation → map container visible/non-zero, no blank, no fatal error, no recalculation loop | `e2e/driver-regressions.spec.ts` | **Pass** |
+| Mobile horizontal overflow now zero + nav collapses to a menu | `e2e/responsive.spec.ts` | **Pass** (fixed; former expected-fail removed) |
+
+- **Viewports:** desktop 1440×900 and mobile **390×844** (the drawer, overflow and nav-collapse tests).
+- **Geolocation strategy:** Playwright per-context `permissions`/`geolocation` with a single synthetic public coordinate near Clayton (`-37.9105, 145.1363`). The journey/DEF tests use the "Skip" path (no location) for determinism; the blank-map/recalc test grants synthetic location and clicks "Enable".
+- **API mocking strategy:** reusable fixtures in `e2e/fixtures/driverJourney.ts` intercept `/api/geocode-batch`, `/api/optimize`, `/api/route` and `/api/directions` with deterministic synthetic data (building on the existing `mockApi.ts`). Only external boundaries are mocked — React state, stop-completion logic, drawer, persistence and driver controls run for real. No test-only production mode.
+- **Recalculation counting:** `mockDirections` returns a request counter; with a stable synthetic location the driver stays on-route, so directions requests stay ≤3 over a 3s settle (no loop). The 15s cooldown / 3-consecutive / 10s grace guards were not weakened.
+
+## Persistence & refresh findings (contract)
+
+`TripContext` holds `trip`/`executionState` in `useState` with **no persistence**. On
+refresh the provider re-runs `createEmptyTrip()` (`status:'input'`), so an active home-page
+trip **intentionally resets to a clean planner** rather than restoring a half-driver state.
+Only *completed* trips are written to `localStorage` (`saveCompletedTrip`); the `/driver`
+dispatch flow separately restores its assigned trip from `localStorage`. This is the
+intended current contract — the E2E test asserts the clean reset and the absence of any
+leaked driver-mode UI, so the user never sees a corrupted partial state. (This supersedes
+the DEF-3 concern for the home-page flow: reset is by design, not data loss of a feature
+that promised persistence.)
+
+## Historical defects — reproduced and fixed
+
+| Defect | Reproduced? | Root cause | Fix |
+| ------ | ----------- | ---------- | --- |
+| **DEF-2 stale route after editing stops** | **Yes** (add & remove both left a startable stale route) | `addStop`/`removeStop`/`updateStop` set `status:'input'` but never cleared `routes` | `TripContext`: `invalidateRoutes()` on add/remove, and on `updateStop` when `address`/`coordinates` change. Stale route can no longer be started. |
+| **DEF-7 double activation of stop completion** | **Yes** (a synchronous double activation completed two stops, skipping one) | `markStopComplete` had no re-entrancy guard; two calls in one batch each advanced the index | `TripContext`: `completionLockRef` set synchronously at completion start, released by an effect keyed on `currentStopIndex`/`completedStopIds.length` (no arbitrary timeout). |
+| **Mobile horizontal overflow** | **Yes** (~document width > viewport at 390px) | `Navbar` rendered all 6 links inline with no responsive collapse | `Navbar`: links now `hidden md:flex`; a `md:hidden` menu button reveals the same links in a dropdown. Desktop unchanged. |
+| **End Trip / map controls missing accessible name (mobile)** | **Yes** (icon-only buttons with `hidden sm:inline` text) | No `aria-label` on icon-only controls | Added `aria-label` to End Trip and the map "Follow my location" / "Show full route overview" buttons. |
+
+## Historical defects — investigated, NOT reproduced
+
+| Scenario | Result |
+| -------- | ------ |
+| Blank map after location permission | **Not reproduced.** With synthetic geolocation the `.driver-mode-map` container stays visible with non-zero dimensions and no fatal error; without a Mapbox token it degrades to a visible configuration notice, never a blank page. |
+| Recalculation loop | **Not reproduced.** Stable synthetic location → directions requests stayed ≤3 over 3s; cooldown/threshold behave reasonably. |
+| Refresh inconsistency | **Not a defect (by design).** Clean planner reset; no corrupted partial state. |
+| Drawer cannot scroll / final stop unreachable | **Not reproduced** as a scroll defect — the list scrolls and the final stop is reachable at 390×844. The only real problem encountered here was the missing accessible name on End Trip (fixed above). |
+
+## Production fixes implemented (files)
+
+| File | Change |
+| ---- | ------ |
+| `src/context/TripContext.tsx` | DEF-2 route invalidation on stop changes; DEF-7 completion re-entrancy guard (`completionLockRef` + release effect). |
+| `src/components/layout/Navbar.tsx` | Responsive collapse: desktop links `hidden md:flex`; mobile menu button + dropdown (fixes horizontal overflow). |
+| `src/components/execution/DriverModeView.tsx` | `aria-label="End trip"` on the icon-only End Trip button. |
+| `src/components/map/DriverMapView.tsx` | `aria-label`s on the icon-only Follow / Overview map controls. |
+
+## Mobile-overflow root cause and result
+
+**Root cause:** the top navigation (`Navbar`) laid out all six links plus the logo and
+theme toggle in a single non-wrapping flex row with no breakpoint collapse, so at 390px the
+content was wider than the viewport (~400px document width). **Result:** links collapse
+into a menu below `md`; measured horizontal overflow at 390px is now ≤2px, the nav remains
+usable via the menu button, and desktop navigation is unchanged. The former
+`test.fail()`-annotated overflow test is now a normal passing test that also asserts the
+390px viewport and the collapsed-menu behaviour. No global `overflow-x:hidden` was used.
+
+## Standalone-output decision
+
+`next.config.js` keeps `output:'standalone'` for the production/Docker build. `next start`
+(used by the Playwright/CI E2E server) is not standalone-compatible and emits a warning, so
+a **dedicated warning-free test build** sets `NEXT_DISABLE_STANDALONE=1` to omit the
+standalone output (Option 2). This does **not** change the production deployment build,
+which never sets that variable. Verified: `NEXT_DISABLE_STANDALONE=1 npm run build` +
+`next start` runs with no standalone warning; the default `npm run build` still emits
+`.next/standalone/server.js`.
+
+## CI integration
+
+`.github/workflows/ci.yml` now has two jobs:
+
+- **`validate`** (mandatory): `npm ci` → `npm run lint` → `npm run typecheck` → `npm test`
+  → coverage (non-blocking, `continue-on-error`) → `npm run build`. The previous
+  script-detection logic that could silently skip tests was removed; a failed test now
+  fails CI.
+- **`e2e`** (`needs: validate`): `npm ci` → `npx playwright install --with-deps chromium`
+  (Chromium only) → `NEXT_DISABLE_STANDALONE=1 npm run build` → `npm run test:e2e`
+  (`PLAYWRIGHT_CHANNEL=chromium` to use the bundled browser) → upload
+  `playwright-report/` + `test-results/` **only on failure**.
+
+Triggers broadened to run on **every** pull request (any base) plus pushes to `main`/`develop`,
+so the stacked `test/* → fix/*` PR is validated. Concurrency cancellation is preserved.
+**No live Mapbox token is required**: unit/API tests stub `fetch`, E2E intercepts `/api/*`,
+and the build compiles without a token (map degrades to a notice). Coverage is intentionally
+not a blocking gate yet (scope is core logic only).
+
+## Validation results (2026-07-14, Phase 3B)
+
+| Check | Result |
+| ----- | ------ |
+| `npm run lint` | **0 errors**, 6 pre-existing warnings (none introduced) |
+| `npm run typecheck` | **Pass** |
+| `npm test` (Vitest) | **83 passed / 0 failed** (8 files) |
+| `npm run test:coverage` | statements **44.69%**, branches **35.76%**, functions **43.52%**, lines **44.77%** (scoped) |
+| `npm run test:e2e` (Playwright) | **17 passed / 0 failed**, **0 expected-failures remaining** |
+| `npm run build` (standalone) | **Pass** — `.next/standalone/server.js` emitted |
+| Test build (`NEXT_DISABLE_STANDALONE=1`) + `next start` | **Pass** — no standalone warning |
+| Workflow YAML | Parsed OK (js-yaml) |
+
+## Remaining manual validation (unchanged intent)
+
+- Real Mapbox map-tile rendering and live polyline on the driver map.
+- Real-device GPS accuracy, permission prompts and off-route recalculation with movement.
+- Safari/iOS and Firefox/WebKit engines (only Chromium is run in CI this phase).
+- Physical-phone touch behaviour and visual/pixel/dark-mode polish.
+- `actionlint`/live GitHub Actions run (only local YAML parse was possible here).
