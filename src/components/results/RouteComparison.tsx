@@ -68,6 +68,12 @@ export function RouteComparison() {
 
   const hasOptimizationBenefit = distanceSaved > 0
 
+  // Distances/durations came from the straight-line fallback (not Mapbox road
+  // routing) if either computed route reports the fallback source.
+  const isFallbackRoute =
+    routes.fifo?.source === 'haversine-fallback' ||
+    routes.optimized?.source === 'haversine-fallback'
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -103,6 +109,16 @@ export function RouteComparison() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
+          {isFallbackRoute && (
+            <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-warning-50 dark:bg-warning-900/20 border border-warning-200/50 dark:border-warning-800/50">
+              <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-warning-600 dark:text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-xs font-medium text-warning-700 dark:text-warning-300">
+                Straight-line estimate — road routing temporarily unavailable. Distances and times are approximate, not live driving values.
+              </span>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <MetricsCard
               title="FIFO Route"
