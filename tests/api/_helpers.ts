@@ -13,27 +13,53 @@ export function postJson(url: string, body: unknown): NextRequest {
 /** A dummy token that passes getMapboxToken()'s placeholder check. */
 export const TEST_MAPBOX_TOKEN = 'pk.test-token-value-not-real'
 
+type EnvSnapshot = {
+  publicToken: string | undefined
+  serverToken: string | undefined
+}
+
+function snapshotMapboxEnv(): EnvSnapshot {
+  return {
+    publicToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
+    serverToken: process.env.MAPBOX_ACCESS_TOKEN,
+  }
+}
+
+function restoreMapboxEnv(snapshot: EnvSnapshot): void {
+  if (snapshot.publicToken === undefined) delete process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+  else process.env.NEXT_PUBLIC_MAPBOX_TOKEN = snapshot.publicToken
+
+  if (snapshot.serverToken === undefined) delete process.env.MAPBOX_ACCESS_TOKEN
+  else process.env.MAPBOX_ACCESS_TOKEN = snapshot.serverToken
+}
+
 /**
- * Install a token in the environment for the duration of a test. Returns a
- * restore function. Kept out of committed .env files — this only mutates the
- * in-memory process env for the test run.
+ * Install a server-only Mapbox token for the duration of a test.
+ * Clears the public token so preference behaviour is unambiguous.
  */
 export function withMapboxToken(token: string = TEST_MAPBOX_TOKEN): () => void {
-  const original = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+  const snapshot = snapshotMapboxEnv()
+  process.env.MAPBOX_ACCESS_TOKEN = token
+  delete process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+  return () => restoreMapboxEnv(snapshot)
+}
+
+/**
+ * Install only the public token (development fallback path for server routes).
+ */
+export function withPublicMapboxTokenOnly(token: string = TEST_MAPBOX_TOKEN): () => void {
+  const snapshot = snapshotMapboxEnv()
   process.env.NEXT_PUBLIC_MAPBOX_TOKEN = token
-  return () => {
-    if (original === undefined) delete process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-    else process.env.NEXT_PUBLIC_MAPBOX_TOKEN = original
-  }
+  delete process.env.MAPBOX_ACCESS_TOKEN
+  return () => restoreMapboxEnv(snapshot)
 }
 
 /** Ensure no Mapbox token is configured (forces the safe fallback path). */
 export function withoutMapboxToken(): () => void {
-  const original = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+  const snapshot = snapshotMapboxEnv()
   delete process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-  return () => {
-    if (original !== undefined) process.env.NEXT_PUBLIC_MAPBOX_TOKEN = original
-  }
+  delete process.env.MAPBOX_ACCESS_TOKEN
+  return () => restoreMapboxEnv(snapshot)
 }
 
 /** Build a mock `fetch` Response-like object. */

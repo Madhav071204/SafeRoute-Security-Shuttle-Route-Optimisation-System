@@ -81,9 +81,9 @@ SafeRoute uses a **nearest-neighbor heuristic** to optimize routes:
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22 (see `.nvmrc` / `.node-version` and `package.json` engines)
 - npm
-- Mapbox API key (free tier available)
+- Mapbox API token (free tier available; public + optional server token)
 
 ### Installation
 
@@ -103,12 +103,15 @@ npm install
 cp .env.example .env.local
 ```
 
-4. Add your Mapbox API token to `.env.local`:
+4. Add Mapbox tokens to `.env.local` (see `.env.example` for roles):
 ```
-NEXT_PUBLIC_MAPBOX_TOKEN=your_mapbox_token_here
+NEXT_PUBLIC_MAPBOX_TOKEN=your_mapbox_public_token_here
+MAPBOX_ACCESS_TOKEN=your_mapbox_server_token_here
 ```
+The public token is embedded in the browser bundle at build time. The server
+token is used by API routes and must never use a `NEXT_PUBLIC_` prefix.
 
-Get a free Mapbox token at: https://account.mapbox.com/access-tokens/
+Get tokens at: https://account.mapbox.com/access-tokens/
 
 5. Start the development server:
 ```bash
@@ -121,7 +124,8 @@ npm run dev
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `NEXT_PUBLIC_MAPBOX_TOKEN` | Mapbox API public token for maps and geocoding | Yes |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | Public Mapbox token for browser Mapbox GL (build-time client bundle) | Yes for maps |
+| `MAPBOX_ACCESS_TOKEN` | Server-only Mapbox token for geocoding/routing/directions API routes | Recommended in production |
 
 ## Privacy and Data Handling
 
