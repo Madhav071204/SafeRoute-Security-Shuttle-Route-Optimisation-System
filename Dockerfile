@@ -1,17 +1,18 @@
 # syntax=docker/dockerfile:1
 
 # ==============================================================================
-# SafeRoute — production Dockerfile (multi-stage)
+# SafeRoute — production Dockerfile (multi-stage, Node 22)
 # ==============================================================================
 # Stage 1 (base):    Shared Node.js image for all stages
 # Stage 2 (deps):    Install npm dependencies from the lockfile
-# Stage 3 (builder): Compile the Next.js production build
+# Stage 3 (builder): Compile the Next.js production standalone build
 # Stage 4 (runner):  Minimal runtime image — only what is needed to serve the app
 # ==============================================================================
 
 # --- Stage 1: base -----------------------------------------------------------
-# Node 20 matches CI. Slim (Debian) avoids Alpine TLS issues on some Docker Desktop setups.
-FROM node:20-slim AS base
+# Node 22 matches the verified local environment and active CI target.
+# Pin to the Node 22 slim line (not an unqualified `latest`).
+FROM node:22-slim AS base
 
 # --- Stage 2: deps -----------------------------------------------------------
 # Install dependencies in an isolated layer so Docker can cache them when only
@@ -23,12 +24,8 @@ WORKDIR /app
 # Copy only manifest files first — maximises layer-cache hits on rebuilds.
 COPY package.json package-lock.json ./
 
-# Optional: set INSECURE_NPM_SSL=true when a corporate proxy breaks TLS inside Docker.
-# Example: docker compose build --build-arg INSECURE_NPM_SSL=true
-ARG INSECURE_NPM_SSL=false
-RUN if [ "$INSECURE_NPM_SSL" = "true" ]; then npm config set strict-ssl false; fi
-
 # npm ci installs exact versions from the lockfile (reproducible builds).
+# TLS verification remains enabled (no strict-ssl=false, no insecure bypass).
 RUN npm ci
 
 # --- Stage 3: builder ------------------------------------------------------
@@ -39,28 +36,39 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Ensure public/ exists so the runner stage can always copy it (this project
-# may not ship static assets yet, but Next.js expects the directory).
+# Ensure public/ exists so the runner stage can always copy it.
 RUN mkdir -p public
 
 # NEXT_PUBLIC_* variables are embedded into the client bundle at build time.
 # Pass them as build arguments — never hardcode secrets in the Dockerfile.
-ARG NEXT_PUBLIC_MAPBOX_TOKEN
+# Prefer a URL-restricted public token for browser Mapbox GL only.
+ARG NEXT_PUBLIC_MAPBOX_TOKEN=""
 ENV NEXT_PUBLIC_MAPBOX_TOKEN=$NEXT_PUBLIC_MAPBOX_TOKEN
-
-ARG INSECURE_NPM_SSL=false
 
 # Disable Next.js anonymous telemetry in CI and container builds.
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
 
-# Allow Google Fonts download when a corporate proxy breaks TLS (same fix as npm ci).
-RUN if [ "$INSECURE_NPM_SSL" = "true" ]; then export NODE_TLS_REJECT_UNAUTHORIZED=0; fi && npm run build
+# TLS verification stays enabled during the build (including font download).
+# For corporate interception CAs, pass NODE_EXTRA_CA_CERTS at build time via a
+# mounted/approved CA file — never disable certificate verification.
+RUN npm run build
 
 # --- Stage 4: runner ---------------------------------------------------------
-# Final image: no compiler, no devDependencies, no full node_modules tree.
+# Final image: no compiler, no package manager install, no full node_modules.
 FROM base AS runner
 
 WORKDIR /app
+
+ARG GIT_REVISION=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="SafeRoute" \
+      org.opencontainers.image.description="Security shuttle route optimisation system" \
+      org.opencontainers.image.source="https://github.com/Madhav071204/SafeRoute-Security-Shuttle-Route-Optimisation-System" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -83,8 +91,9 @@ ENV PORT=3000
 # Bind to all interfaces so traffic from outside the container reaches the app.
 ENV HOSTNAME=0.0.0.0
 
-# Verify the HTTP server responds without installing curl/wget in the image.
+# Lightweight liveness probe against /api/health (no curl in the image).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "require('http').get('http://127.0.0.1:3000/', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"
+  CMD node -e "require('http').get('http://127.0.0.1:3000/api/health', (r) => { let d=''; r.on('data', c => d+=c); r.on('end', () => process.exit(r.statusCode===200 ? 0 : 1)); }).on('error', () => process.exit(1))"
 
+# PID 1 is the Node process so SIGTERM stops the container cleanly.
 CMD ["node", "server.js"]

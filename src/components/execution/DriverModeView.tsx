@@ -408,6 +408,7 @@ export function DriverModeView({ onStopAction }: DriverModeViewProps) {
               variant="danger"
               size="sm"
               onClick={endExecution}
+              aria-label="End trip"
               className="!px-3 !py-1.5 sm:!px-4 sm:!py-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

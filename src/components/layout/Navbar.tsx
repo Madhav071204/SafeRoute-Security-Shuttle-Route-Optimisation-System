@@ -2,12 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import clsx from 'clsx'
 
 export function Navbar() {
   const pathname = usePathname()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   const navLinks = [
     { href: '/request', label: 'Request' },
@@ -17,6 +19,11 @@ export function Navbar() {
     { href: '/settings', label: 'Settings' },
     { href: '/about', label: 'About' },
   ]
+
+  // Close the mobile menu whenever the route changes.
+  useEffect(() => {
+    setIsMenuOpen(false)
+  }, [pathname])
 
   return (
     <motion.header
@@ -61,7 +68,9 @@ export function Navbar() {
               </div>
             </Link>
 
-            <div className="flex items-center gap-2">
+            {/* Desktop navigation: full link row. Collapses below `md` so the
+                bar never overflows horizontally on mobile. */}
+            <div className="hidden md:flex items-center gap-2">
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
@@ -79,7 +88,61 @@ export function Navbar() {
               <div className="w-px h-6 bg-surface-200 dark:bg-surface-700 mx-2" />
               <ThemeToggle />
             </div>
+
+            {/* Mobile controls: theme toggle + a menu button that reveals the
+                same links in a dropdown, keeping navigation usable on narrow
+                screens without overflowing the viewport. */}
+            <div className="flex md:hidden items-center gap-2">
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen((open) => !open)}
+                aria-label={isMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                aria-expanded={isMenuOpen}
+                aria-controls="mobile-nav-menu"
+                className="p-2 rounded-xl text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {isMenuOpen ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  )}
+                </svg>
+              </button>
+            </div>
           </div>
+
+          {/* Mobile dropdown menu */}
+          <AnimatePresence>
+            {isMenuOpen && (
+              <motion.div
+                id="mobile-nav-menu"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="md:hidden overflow-hidden"
+              >
+                <div className="flex flex-col gap-1 pb-4 pt-1">
+                  {navLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={clsx(
+                        'px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200',
+                        pathname === link.href
+                          ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400'
+                          : 'text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white hover:bg-surface-100 dark:hover:bg-surface-800'
+                      )}
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </nav>
       </div>
     </motion.header>

@@ -29,8 +29,19 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
-# Test and coverage output
+# Test and coverage output — never ship in the image
 coverage
+test-results
+playwright-report
+blob-report
+e2e
+tests
+vitest.config.ts
+playwright.config.ts
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
 
 # TypeScript incremental build cache
 *.tsbuildinfo
@@ -41,8 +52,16 @@ docs
 .github
 README.md
 LICENSE
+*.md
 
 # Docker files themselves (avoid recursive copy noise)
 Dockerfile
 docker-compose*.yml
 .dockerignore
+
+# Certificates — never embed CA files from the build context
+*.pem
+*.crt
+*.key
+certs
+certificates
