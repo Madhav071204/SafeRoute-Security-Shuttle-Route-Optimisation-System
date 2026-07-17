@@ -46,7 +46,7 @@ SafeRoute lets drivers enter up to 15 passenger addresses and calculates an opti
 | Geocoding | Mapbox Geocoding API |
 | Routing | Mapbox Directions API |
 | Algorithms | Custom nearest-neighbor heuristic |
-| Deployment | Vercel |
+| Deployment | AWS ECS Express Mode (see below) |
 
 ## Algorithm
 
@@ -76,6 +76,15 @@ SafeRoute uses a **nearest-neighbor heuristic** to optimize routes:
 - Map with optimized route
 - Route comparison panel
 - Driver execution view
+
+## Live deployment
+
+Production (AWS ECS Express Mode, `ap-southeast-2`):
+
+https://sa-2cf22f7190f04affacba88ff88c8e636.ecs.ap-southeast-2.on.aws
+
+Health: `/api/health` → `{"status":"ok"}`.  
+Evidence and rollback/teardown: `docs/aws-first-deployment.md`.
 
 ## Getting Started
 

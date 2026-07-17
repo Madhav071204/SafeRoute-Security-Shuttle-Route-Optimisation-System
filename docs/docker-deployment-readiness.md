@@ -227,3 +227,11 @@ after authenticating Scout or running Trivy outside the repo.
 * Image size ~408MB is acceptable for portfolio deployment; further slim
   variants (distroless) were out of scope.
 * Corporate CA support is documented only — not required for ordinary users.
+
+## Phase 5 follow-up
+
+First AWS production deployment completed on branch `deploy/aws-first-release`.
+See `docs/aws-first-deployment.md` for the live HTTPS URL, image digest, OIDC
+CD, rollback, and teardown. Build images with `--provenance=false --sbom=false`
+so Amazon ECR basic scanning accepts a single Docker manifest.
+

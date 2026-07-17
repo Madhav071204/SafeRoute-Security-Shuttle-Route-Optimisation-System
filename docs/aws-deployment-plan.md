@@ -1,8 +1,9 @@
 # SafeRoute AWS Deployment Plan
 
 Implementation-ready design for a first public HTTPS portfolio deployment.
-**Do not provision resources from this document until a later phase explicitly
-authorises chargeable AWS usage.**
+**Phase 5 has provisioned the first production stack.** See
+`docs/aws-first-deployment.md` for the live URL, digests, and operational
+procedures. This plan remains the architectural reference.
 
 ## Objective
 
