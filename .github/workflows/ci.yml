@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+      - chore/release-baseline
   # Run on every pull request regardless of base branch so stacked review
   # branches (e.g. test/* → fix/*) are validated too.
   pull_request:
@@ -24,10 +25,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           # Node 22 matches local verification, Docker production image, and engines.
           node-version: 22
@@ -80,10 +81,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -116,3 +117,157 @@ jobs:
             test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  deploy:
+    name: Deploy to AWS (OIDC)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Deploy only after both quality gates pass, and only on push to the
+    # release baseline (never from untrusted pull_request code).
+    needs: [validate, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/chore/release-baseline'
+    environment: production
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      ECS_EXPRESS_SERVICE_NAME: ${{ vars.ECS_EXPRESS_SERVICE_NAME }}
+      ECS_EXPRESS_SERVICE_ARN: ${{ vars.ECS_EXPRESS_SERVICE_ARN }}
+      HEALTH_CHECK_PATH: ${{ vars.HEALTH_CHECK_PATH }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        id: build
+        env:
+          # Public browser token — still treated as protected to avoid log leaks.
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="${GITHUB_SHA}"
+          REGISTRY="${{ steps.ecr.outputs.registry }}"
+          IMAGE_URI="${REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          # Disable BuildKit attestations so ECR basic scanning accepts a
+          # single Docker manifest (OCI indexes are not scannable).
+          docker build \
+            --provenance=false \
+            --sbom=false \
+            --build-arg "NEXT_PUBLIC_MAPBOX_TOKEN=${NEXT_PUBLIC_MAPBOX_TOKEN}" \
+            --build-arg "GIT_REVISION=${GITHUB_SHA}" \
+            --build-arg "BUILD_DATE=${BUILD_DATE}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            -t "${IMAGE_URI}" \
+            .
+
+          docker push "${IMAGE_URI}"
+
+          DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids "imageTag=${IMAGE_TAG}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+          echo "image_digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Image ${IMAGE_TAG} @ ${DIGEST}"
+
+      - name: Update ECS Express Mode service
+        id: deploy
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.image_digest }}
+          SECRET_ARN: ${{ vars.MAPBOX_SECRET_ARN }}
+        run: |
+          set -euo pipefail
+          REGISTRY="${{ steps.ecr.outputs.registry }}"
+          IMAGE_REF="${REGISTRY}/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
+
+          PRIMARY=$(jq -n \
+            --arg image "$IMAGE_REF" \
+            --arg secret "$SECRET_ARN" \
+            '{
+              image: $image,
+              containerPort: 3000,
+              awsLogsConfiguration: { logGroup: "/ecs/saferoute-web", logStreamPrefix: "ecs" },
+              environment: [{ name: "NODE_ENV", value: "production" }],
+              secrets: [{ name: "MAPBOX_ACCESS_TOKEN", valueFrom: $secret }]
+            }')
+
+          aws ecs update-express-gateway-service \
+            --service-arn "${ECS_EXPRESS_SERVICE_ARN}" \
+            --primary-container "${PRIMARY}" \
+            --region "${AWS_REGION}"
+
+          echo "Updated ${ECS_EXPRESS_SERVICE_NAME} to ${IMAGE_REF}"
+
+      - name: Wait for service ACTIVE and verify health
+        id: health
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 45); do
+            DESC="$(aws ecs describe-express-gateway-service \
+              --service-arn "${ECS_EXPRESS_SERVICE_ARN}" \
+              --region "${AWS_REGION}" \
+              --output json)"
+            STATUS="$(echo "$DESC" | jq -r '.service.status.statusCode // empty')"
+            echo "Attempt ${i}: status=${STATUS}"
+            if [ "$STATUS" = "ACTIVE" ]; then
+              URL="$(echo "$DESC" | jq -r '
+                [.service.activeConfigurations[]?.ingressPaths[]?.endpoint // empty]
+                | map(select(startswith("https://")))
+                | .[0] // empty
+              ')"
+              # Fallback: extract first *.on.aws URL from the describe payload
+              if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+                URL="$(echo "$DESC" | grep -oE 'https://[a-zA-Z0-9._-]+\.on\.aws' | head -n1 || true)"
+              fi
+              if [ -z "$URL" ]; then
+                echo "ACTIVE but public URL not found in describe output"
+                echo "$DESC" | jq '{status: .service.status, keys: (.service|keys)}'
+                exit 1
+              fi
+              echo "service_url=${URL}" >> "$GITHUB_OUTPUT"
+              REVISION="$(echo "$DESC" | jq -r '.service.activeConfigurations[0].serviceRevisionArn // empty')"
+              echo "service_revision=${REVISION}" >> "$GITHUB_OUTPUT"
+              curl -fsS "${URL}${HEALTH_CHECK_PATH}" | tee /tmp/health.json
+              grep -q '"status":"ok"' /tmp/health.json
+              curl -fsS -o /dev/null -w "%{http_code}\n" "${URL}/" | grep -q 200
+              echo "Health OK at ${URL}"
+              echo "Digest ${{ steps.build.outputs.image_digest }}"
+              echo "Revision ${REVISION}"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Timed out waiting for ACTIVE"
+          exit 1
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          {
+            echo "## SafeRoute production deploy"
+            echo "- Image tag: \`${{ steps.build.outputs.image_tag }}\`"
+            echo "- Image digest: \`${{ steps.build.outputs.image_digest }}\`"
+            echo "- Service URL: ${{ steps.health.outputs.service_url }}"
+            echo "- Revision: \`${{ steps.health.outputs.service_revision }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
