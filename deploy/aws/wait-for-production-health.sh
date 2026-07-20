@@ -28,14 +28,10 @@ extract_public_url() {
   local desc="$1"
   local url
   url="$(echo "$desc" | jq -r '
-    [
-      .service.activeConfigurations[]?.ingressPaths[]?.endpoint // empty,
-      .service.currentDeployment?.ingressPaths[]?.endpoint // empty,
-      .service.pendingDeployment?.ingressPaths[]?.endpoint // empty
-    ]
-    | map(select(type == "string" and startswith("https://")))
+    [.. | strings | select(test("^https://[a-zA-Z0-9._-]+\\.on\\.aws$"))]
+    | unique
     | .[0] // empty
-  ')"
+  ' 2>/dev/null || true)"
   if [ -z "$url" ] || [ "$url" = "null" ]; then
     url="$(echo "$desc" | grep -oE 'https://[a-zA-Z0-9._-]+\.on\.aws' | head -n1 || true)"
   fi
@@ -46,23 +42,14 @@ print_sanitised_diagnostics() {
   local desc="$1"
   local status="$2"
   local url="$3"
-  echo "$desc" | jq -c '{
-    serviceStatus: .service.status.statusCode,
-    serviceName: .service.serviceName,
-    activeConfigCount: (.service.activeConfigurations | length),
-    currentDeploymentStatus: .service.currentDeployment.status.statusCode,
-    pendingDeploymentStatus: (.service.pendingDeployment.status.statusCode // null),
-    ingressEndpointCount: (
-      [
-        .service.activeConfigurations[]?.ingressPaths[]?.endpoint,
-        .service.currentDeployment?.ingressPaths[]?.endpoint
-      ]
-      | map(select(type == "string" and length > 0))
-      | length
-    ),
-    pollStatus: "'"${status}"'",
-    urlDiscovered: (if "'"${url}"'" == "" then false else true end)
-  }'
+  echo "$desc" | jq -c --arg pollStatus "$status" --arg urlDiscovered "$([ -n "$url" ] && echo true || echo false)" '{
+    serviceStatus: (.service.status.statusCode // null),
+    serviceName: (.service.serviceName // null),
+    activeConfigCount: ((.service.activeConfigurations // []) | length),
+    onAwsEndpointCount: ([.. | strings | select(test("\\.on\\.aws$"))] | unique | length),
+    pollStatus: $pollStatus,
+    urlDiscovered: ($urlDiscovered == "true")
+  }' 2>/dev/null || echo "{\"pollStatus\":\"${status}\",\"urlDiscovered\":$([ -n "$url" ] && echo true || echo false)}"
 }
 
 SERVICE_ACTIVE=false
