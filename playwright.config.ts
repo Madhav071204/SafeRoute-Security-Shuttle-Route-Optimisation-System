@@ -21,6 +21,7 @@ const CHROMIUM_USE =
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: ['**/production-smoke.spec.ts'],
   // Core deterministic tests mock external Mapbox calls, so a single worker
   // against one dev server keeps runs stable and order-independent.
   fullyParallel: false,

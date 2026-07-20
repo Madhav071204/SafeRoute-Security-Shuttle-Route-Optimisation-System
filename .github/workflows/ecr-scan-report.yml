@@ -1,0 +1,67 @@
+name: Fetch ECR scan findings
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: 'Image digest (sha256:...) — defaults to tag c71548fbd5d9d96e67e3e1291dcee348ecede150'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  scan-report:
+    name: ECR vulnerability report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve digest and print findings
+        run: |
+          set -euo pipefail
+          DIGEST="${{ inputs.image_digest }}"
+          if [ -z "$DIGEST" ]; then
+            DIGEST="$(aws ecr describe-images \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-ids imageTag=c71548fbd5d9d96e67e3e1291dcee348ecede150 \
+              --query 'imageDetails[0].imageDigest' \
+              --output text)"
+          fi
+          echo "Digest: ${DIGEST}"
+          aws ecr describe-image-scan-findings \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-id "imageDigest=${DIGEST}" \
+            --output json > /tmp/scan.json
+          jq '{
+            status: .imageScanStatus.status,
+            counts: .imageScanFindings.findingSeverityCounts,
+            criticalHigh: [
+              .imageScanFindings.enhancedFindings[]?
+              | select(.severity=="CRITICAL" or .severity=="HIGH")
+              | {
+                  name: .name,
+                  severity: .severity,
+                  package: .packageVulnerabilityDetails.vulnerablePackages[0].name,
+                  version: .packageVulnerabilityDetails.vulnerablePackages[0].version,
+                  fixed: .packageVulnerabilityDetails.vulnerablePackages[0].fixedInVersion,
+                  source: .packageVulnerabilityDetails.source
+                }
+            ]
+          }' /tmp/scan.json | tee "$GITHUB_STEP_SUMMARY"
