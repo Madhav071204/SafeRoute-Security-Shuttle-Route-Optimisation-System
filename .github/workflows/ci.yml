@@ -179,7 +179,15 @@ jobs:
             -t "${IMAGE_URI}" \
             .
 
-          docker push "${IMAGE_URI}"
+          if aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids "imageTag=${IMAGE_TAG}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text 2>/dev/null | grep -q '^sha256:'; then
+            echo "Image tag ${IMAGE_TAG} already exists (immutable ECR); reusing digest"
+          else
+            docker push "${IMAGE_URI}"
+          fi
 
           DIGEST="$(aws ecr describe-images \
             --repository-name "${ECR_REPOSITORY}" \
@@ -200,6 +208,7 @@ jobs:
           set -euo pipefail
           REGISTRY="${{ steps.ecr.outputs.registry }}"
           IMAGE_REF="${REGISTRY}/${ECR_REPOSITORY}@${IMAGE_DIGEST}"
+          SECRET_ARN="$(printf '%s' "${SECRET_ARN}" | tr -d '\r\n')"
 
           PRIMARY=$(jq -n \
             --arg image "$IMAGE_REF" \
