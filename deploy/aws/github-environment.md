@@ -10,6 +10,7 @@ Configure the GitHub Environment named `production` with:
 | `ECR_REPOSITORY` | `saferoute` |
 | `ECS_EXPRESS_SERVICE_NAME` | `saferoute-web` |
 | `ECS_EXPRESS_SERVICE_ARN` | Full ARN from create/describe (CLI requires `--service-arn`) |
+| `ECS_EXPRESS_SERVICE_URL` | Stable public HTTPS base URL (e.g. `https://….ecs.ap-southeast-2.on.aws`) — used when describe omits ingress during deploy transitions |
 | `HEALTH_CHECK_PATH` | `/api/health` |
 | `AWS_DEPLOY_ROLE_ARN` | ARN of `SafeRouteGitHubDeployRole` |
 | `MAPBOX_SECRET_ARN` | ARN of `saferoute/mapbox-server` (reference only) |

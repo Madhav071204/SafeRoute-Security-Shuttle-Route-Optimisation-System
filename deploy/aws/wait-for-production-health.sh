@@ -21,19 +21,27 @@ source "${SCRIPT_DIR}/constants.sh"
 AWS_REGION="${AWS_REGION:-ap-southeast-2}"
 ECS_EXPRESS_SERVICE_ARN="${ECS_EXPRESS_SERVICE_ARN:?ECS_EXPRESS_SERVICE_ARN is required}"
 HEALTH_CHECK_PATH="${HEALTH_CHECK_PATH:-/api/health}"
+ECS_EXPRESS_SERVICE_URL="${ECS_EXPRESS_SERVICE_URL:-}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-60}"
 POLL_INTERVAL_SECONDS="${POLL_INTERVAL_SECONDS:-15}"
 
 extract_public_url() {
   local desc="$1"
-  local url
-  url="$(echo "$desc" | jq -r '
-    [.. | strings | select(test("^https://[a-zA-Z0-9._-]+\\.on\\.aws$"))]
-    | unique
-    | .[0] // empty
-  ' 2>/dev/null || true)"
-  if [ -z "$url" ] || [ "$url" = "null" ]; then
+  local url host
+
+  url="$(echo "$desc" | grep -oE 'https://[a-zA-Z0-9._-]+\.ecs\.[a-z0-9-]+\.on\.aws' | head -n1 || true)"
+  if [ -z "$url" ]; then
     url="$(echo "$desc" | grep -oE 'https://[a-zA-Z0-9._-]+\.on\.aws' | head -n1 || true)"
+  fi
+  if [ -z "$url" ]; then
+    host="$(echo "$desc" | grep -oE '[a-zA-Z0-9._-]+\.ecs\.[a-z0-9-]+\.on\.aws' | head -n1 || true)"
+    if [ -n "$host" ]; then
+      url="https://${host}"
+    fi
+  fi
+  if [ -z "$url" ] && [ -n "$ECS_EXPRESS_SERVICE_URL" ]; then
+    url="${ECS_EXPRESS_SERVICE_URL%/}"
+    echo "Using configured ECS_EXPRESS_SERVICE_URL fallback"
   fi
   printf '%s' "$url"
 }
