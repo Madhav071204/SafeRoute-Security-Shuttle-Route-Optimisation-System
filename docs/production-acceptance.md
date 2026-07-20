@@ -12,7 +12,7 @@ https://sa-2cf22f7190f04affacba88ff88c8e636.ecs.ap-southeast-2.on.aws
 |------|-------|
 | **Release baseline (post PR #5)** | `d2bcb961e432e6bfe4a36aaeabd3b61f573aed93` |
 | **PR #5 merge** | `d2bcb961e432e6bfe4a36aaeabd3b61f573aed93` @ 2026-07-20T17:07:58+10:00 |
-| **Currently serving (ECS)** | `d2bcb961e432e6bfe4a36aaeabd3b61f573aed93` @ `sha256:1beb93d7d5dbc7b4f37cd45b3372d738dfa69ac16c75c8e2cc90ff6886e5370b` |
+| **Currently serving (ECS)** | `b7eac88499256785c6cc079e67c97d343906c995` @ `sha256:8ef3c63a9389576d14613228af1e7f2654830b4cf9209f0c6f6fdc11e21a205e` |
 | **Task definition** | `default-saferoute-web:5` |
 | **Service revision** | `.../service-revision/default/saferoute-web/8337120743105152329` |
 | **Prior bootstrap image** | `sha256:70fe0a83d577f133629b5db7a8989a7c8d11ab8498c64d58ec2f501da5cc7eb7` |
@@ -59,9 +59,13 @@ https://sa-2cf22f7190f04affacba88ff88c8e636.ecs.ap-southeast-2.on.aws
 
 | Field | Result |
 |-------|--------|
-| Status | **Partially proven** — validate → Playwright → OIDC → ECR push confirmed on runs 29721603128 and 29723637074 |
-| ECS via OIDC | Blocked by IAM (fixed), then secret ARN newline (fixed), then immutable-tag rerun (CI fix pending merge) |
-| First image reaching ECS | `sha256:1beb93d7…` (PR #5 security-closure build) via operator rollback script after OIDC push |
+| Workflow | [CI run 29724525168](https://github.com/Madhav071204/SafeRoute-Security-Shuttle-Route-Optimisation-System/actions/runs/29724525168) |
+| Commit | `b7eac88499256785c6cc079e67c97d343906c995` (PR #6 merge) |
+| Validate / Playwright | **success** |
+| OIDC / ECR push | **success** → `sha256:8ef3c63a9389576d14613228af1e7f2654830b4cf9209f0c6f6fdc11e21a205e` |
+| ECS update via OIDC | **success** — `ecs:RegisterTaskDefinition` + `update-express-gateway-service` |
+| Health step in Actions | **failure** — public URL not yet present in describe output during deployment transition; production `/api/health` verified manually post-deploy |
+| Production digest match | **Confirmed** — ECS active image matches workflow digest |
 
 ## Health and availability evidence
 
@@ -202,6 +206,6 @@ Scan COMPLETE @ 2026-07-20. Counts unchanged; finding mix shifted (Debian `perl`
 
 **Conditionally accepted for controlled portfolio demonstration**
 
-Evidence supports HTTPS availability, Mapbox server routing on the PR #5 security image, IAM/CD remediation, ECR push via OIDC, operator-validated rollback, and automated test baselines. **Remaining blockers before full acceptance:** Mapbox public URL restrictions, OIDC ECS deploy confirmation via Actions (after CI fix merge), and full production driver-journey browser pass.
+Evidence supports HTTPS availability, Mapbox server routing, full OIDC CD through ECS update (commit `b7eac88`), operator-validated rollback, and automated test baselines. **Remaining blockers:** Mapbox public URL restrictions and full production driver-journey browser pass.
 
 This is **not** enterprise production-ready.
