@@ -232,43 +232,9 @@ jobs:
         id: health
         run: |
           set -euo pipefail
-          for i in $(seq 1 45); do
-            DESC="$(aws ecs describe-express-gateway-service \
-              --service-arn "${ECS_EXPRESS_SERVICE_ARN}" \
-              --region "${AWS_REGION}" \
-              --output json)"
-            STATUS="$(echo "$DESC" | jq -r '.service.status.statusCode // empty')"
-            echo "Attempt ${i}: status=${STATUS}"
-            if [ "$STATUS" = "ACTIVE" ]; then
-              URL="$(echo "$DESC" | jq -r '
-                [.service.activeConfigurations[]?.ingressPaths[]?.endpoint // empty]
-                | map(select(startswith("https://")))
-                | .[0] // empty
-              ')"
-              # Fallback: extract first *.on.aws URL from the describe payload
-              if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-                URL="$(echo "$DESC" | grep -oE 'https://[a-zA-Z0-9._-]+\.on\.aws' | head -n1 || true)"
-              fi
-              if [ -z "$URL" ]; then
-                echo "ACTIVE but public URL not found in describe output"
-                echo "$DESC" | jq '{status: .service.status, keys: (.service|keys)}'
-                exit 1
-              fi
-              echo "service_url=${URL}" >> "$GITHUB_OUTPUT"
-              REVISION="$(echo "$DESC" | jq -r '.service.activeConfigurations[0].serviceRevisionArn // empty')"
-              echo "service_revision=${REVISION}" >> "$GITHUB_OUTPUT"
-              curl -fsS "${URL}${HEALTH_CHECK_PATH}" | tee /tmp/health.json
-              grep -q '"status":"ok"' /tmp/health.json
-              curl -fsS -o /dev/null -w "%{http_code}\n" "${URL}/" | grep -q 200
-              echo "Health OK at ${URL}"
-              echo "Digest ${{ steps.build.outputs.image_digest }}"
-              echo "Revision ${REVISION}"
-              exit 0
-            fi
-            sleep 20
-          done
-          echo "Timed out waiting for ACTIVE"
-          exit 1
+          chmod +x deploy/aws/wait-for-production-health.sh
+          deploy/aws/wait-for-production-health.sh
+          echo "Digest ${{ steps.build.outputs.image_digest }}"
 
       - name: Deployment summary
         if: always()

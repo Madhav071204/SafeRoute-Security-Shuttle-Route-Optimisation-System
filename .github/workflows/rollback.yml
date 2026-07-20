@@ -85,28 +85,5 @@ jobs:
       - name: Wait for ACTIVE and verify health
         run: |
           set -euo pipefail
-          for i in $(seq 1 45); do
-            DESC="$(aws ecs describe-express-gateway-service \
-              --service-arn "${ECS_EXPRESS_SERVICE_ARN}" \
-              --region "${AWS_REGION}" \
-              --output json)"
-            STATUS="$(echo "$DESC" | jq -r '.service.status.statusCode // empty')"
-            echo "Attempt ${i}: status=${STATUS}"
-            if [ "$STATUS" = "ACTIVE" ]; then
-              URL="$(echo "$DESC" | jq -r '
-                [.service.activeConfigurations[]?.ingressPaths[]?.endpoint // empty]
-                | map(select(startswith("https://")))
-                | .[0] // empty
-              ')"
-              if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-                URL="$(echo "$DESC" | grep -oE 'https://[a-zA-Z0-9._-]+\.on\.aws' | head -n1 || true)"
-              fi
-              test -n "$URL"
-              curl -fsS "${URL}${HEALTH_CHECK_PATH}" | tee /tmp/health.json
-              grep -q '"status":"ok"' /tmp/health.json
-              echo "Rollback healthy at ${URL}"
-              exit 0
-            fi
-            sleep 20
-          done
-          exit 1
+          chmod +x deploy/aws/wait-for-production-health.sh
+          deploy/aws/wait-for-production-health.sh
