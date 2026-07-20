@@ -10,19 +10,18 @@
 
 ## Deployed commit
 
-`e0dd4a2a86b72e532ae61538ce4974f9e2f4d059` (merge of PR #3 into `chore/release-baseline`)
+`d2bcb961e432e6bfe4a36aaeabd3b61f573aed93` (merge of PR #5 into `chore/release-baseline`, 2026-07-20)
 
-Image tag used: `e0dd4a2a86b72e532ae61538ce4974f9e2f4d059-linux-amd64`  
-(Built with `--provenance=false --sbom=false` so ECR basic scanning accepts a Docker v2 manifest.)
+Prior bootstrap: `e0dd4a2a86b72e532ae61538ce4974f9e2f4d059` @ `sha256:70fe0a83…`
 
 ## Image tag and digest
 
 | Field | Value |
 |-------|-------|
-| Tag | `e0dd4a2a86b72e532ae61538ce4974f9e2f4d059-linux-amd64` |
-| Digest | `sha256:70fe0a83d577f133629b5db7a8989a7c8d11ab8498c64d58ec2f501da5cc7eb7` |
-| Approx size | ~95 MB |
-| Scan | COMPLETE — CRITICAL 3, HIGH 5, MEDIUM 3 (base image CVEs; not gated in Phase 5) |
+| Tag | `d2bcb961e432e6bfe4a36aaeabd3b61f573aed93` |
+| Digest | `sha256:1beb93d7d5dbc7b4f37cd45b3372d738dfa69ac16c75c8e2cc90ff6886e5370b` |
+| Task definition | `default-saferoute-web:5` |
+| Scan | COMPLETE — CRITICAL 3, HIGH 5, MEDIUM 3 (Debian base; see `docs/production-acceptance.md`) |
 
 ## ECR repository
 
@@ -45,7 +44,7 @@ Image tag used: `e0dd4a2a86b72e532ae61538ce4974f9e2f4d059-linux-amd64`
 | Tasks | min 1 / max 2 |
 | Health path | `/api/health` |
 | Service ARN | `arn:aws:ecs:ap-southeast-2:6908********0404:service/default/saferoute-web` |
-| Revision (at verification) | `.../service-revision/default/saferoute-web/0670214419737168548` |
+| Revision (at verification) | `.../service-revision/default/saferoute-web/8337120743105152329` |
 
 ## Public HTTPS URL
 
@@ -78,7 +77,7 @@ https://sa-2cf22f7190f04affacba88ff88c8e636.ecs.ap-southeast-2.on.aws
 
 * Secret name: `saferoute/mapbox-server`
 * Stored as a **plain string** token (not a JSON object) so ECS injects the value correctly.
-* Not stored in GitHub. GitHub Environment variable `MAPBOX_SECRET_ARN` is a reference only.
+* `MAPBOX_SECRET_ARN` is a reference only — **no trailing whitespace** (newline caused ECS deploy failure until fixed 2026-07-20).
 * `NEXT_PUBLIC_MAPBOX_TOKEN` is a GitHub Environment **secret** used at image build time only.
 
 ## OIDC trust design
