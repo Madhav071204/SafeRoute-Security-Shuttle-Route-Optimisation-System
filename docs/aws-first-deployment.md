@@ -138,8 +138,22 @@ Deletes only SafeRoute-named resources (Express service, ECR `saferoute`, log gr
 
 ## Remaining manual checks
 
-* [ ] Open the public URL from a network that resolves `*.on.aws` (or use 8.8.8.8) and smoke-test map + address search in a browser
+* [x] PR #4 merged into `chore/release-baseline` (merge `c71548f`, 2026-07-20)
+* [x] First CD workflow triggered — validate/e2e/deploy jobs ran; deploy failed on missing `ecs:RegisterTaskDefinition` (see `docs/production-acceptance.md`)
+* [x] Production API health + Mapbox routing verified on current serving image
+* [x] Production Playwright smoke (3 tests) passed locally
+* [ ] Apply updated GitHub deploy IAM policy (`deploy/aws/apply-github-deploy-policy.ps1`) and re-run CD deploy job
 * [ ] Restrict Mapbox public token URL origins to the Express HTTPS host (+ localhost for dev)
 * [ ] Confirm GitHub Environment protection rules (reviewer / wait timer) if desired
-* [ ] First CD deploy via push to `chore/release-baseline` after this PR merges
-* [ ] Optional: re-image on a newer Node base when CRITICAL CVEs are addressed
+* [ ] Merge `fix/production-security-closure` and verify ECS serves new digest after CD success
+
+## Phase 5B — PR #4 merge and first CD (2026-07-20)
+
+| Item | Evidence |
+|------|----------|
+| PR #4 merge commit | `c71548fbd5d9d96e67e3e1291dcee348ecede150` |
+| CD workflow | [run 29721603128](https://github.com/Madhav071204/SafeRoute-Security-Shuttle-Route-Optimisation-System/actions/runs/29721603128) |
+| OIDC | Succeeded |
+| Image pushed (not deployed) | `c71548f…` @ `sha256:88ade0420bf1a1251d7bbbd1848d813a7aa2b1e97094014f79bae045a8caa0f8` |
+| Deploy blocker | `ecs:RegisterTaskDefinition` denied — fixed in `fix/production-security-closure` |
+| Acceptance record | `docs/production-acceptance.md` |
