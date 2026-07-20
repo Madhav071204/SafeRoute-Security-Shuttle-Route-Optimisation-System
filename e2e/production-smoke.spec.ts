@@ -12,10 +12,11 @@ const PRODUCTION_URL =
 
 test.use({ baseURL: PRODUCTION_URL })
 
-test('health endpoint returns ok', async ({ request }) => {
-  const res = await request.get('/api/health')
-  expect(res.status()).toBe(200)
-  const body = await res.json()
+test('health endpoint returns ok', async ({ page }) => {
+  const res = await page.goto('/api/health')
+  expect(res?.status()).toBe(200)
+  const text = await page.locator('body').innerText()
+  const body = JSON.parse(text)
   expect(body).toMatchObject({ status: 'ok' })
 })
 
