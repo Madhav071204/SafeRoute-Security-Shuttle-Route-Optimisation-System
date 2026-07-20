@@ -22,7 +22,9 @@
         "ecr:CompleteLayerUpload",
         "ecr:DescribeRepositories",
         "ecr:DescribeImages",
-        "ecr:ListImages"
+        "ecr:ListImages",
+        "ecr:DescribeImageScanFindings",
+        "ecr:GetImageScanFindings"
       ],
       "Resource": "arn:aws:ecr:ap-southeast-2:ACCOUNT_ID:repository/saferoute"
     },
@@ -39,6 +41,15 @@
         "ecs:DescribeTaskDefinition"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "EcsRegisterSafeRouteTaskDefinition",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:RegisterTaskDefinition",
+        "ecs:DeregisterTaskDefinition"
+      ],
+      "Resource": "arn:aws:ecs:ap-southeast-2:ACCOUNT_ID:task-definition/default-saferoute-web:*"
     },
     {
       "Sid": "PassSafeRouteEcsRoles",

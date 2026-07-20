@@ -84,7 +84,8 @@ Production (AWS ECS Express Mode, `ap-southeast-2`):
 https://sa-2cf22f7190f04affacba88ff88c8e636.ecs.ap-southeast-2.on.aws
 
 Health: `/api/health` → `{"status":"ok"}`.  
-Evidence and rollback/teardown: `docs/aws-first-deployment.md`.
+OIDC CD: push to `chore/release-baseline` runs validate → Playwright → deploy (see `docs/ci-cd.md`).  
+Evidence: `docs/aws-first-deployment.md`, `docs/production-acceptance.md`.
 
 ## Getting Started
 

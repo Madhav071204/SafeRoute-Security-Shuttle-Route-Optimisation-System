@@ -73,6 +73,12 @@ LABEL org.opencontainers.image.title="SafeRoute" \
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Patch OS packages in the runtime image (Debian slim base CVEs from ECR scan).
+USER root
+RUN apt-get update \
+  && apt-get upgrade -y --no-install-recommends \
+  && rm -rf /var/lib/apt/lists/*
+
 # Run as a non-root user — limits damage if the container is compromised.
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs
