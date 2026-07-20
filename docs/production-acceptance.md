@@ -67,9 +67,29 @@ https://sa-2cf22f7190f04affacba88ff88c8e636.ecs.ap-southeast-2.on.aws
 | Health step in Actions | **failure** — public URL not yet present in describe output during deployment transition; production `/api/health` verified manually post-deploy |
 | Production digest match | **Confirmed** — ECS active image matches workflow digest |
 
+### PR #7 merge (immutable-tag CD rerun)
+
+| Field | Result |
+|-------|--------|
+| Workflow | [CI run 29724815504](https://github.com/Madhav071204/SafeRoute-Security-Shuttle-Route-Optimisation-System/actions/runs/29724815504) |
+| Commit | `4adab00` (merge PR #7) |
+| Validate / Playwright | **success** |
+| OIDC / ECR push | **success** |
+| ECS update via OIDC | **success** |
+| Health step in Actions | **failure** — service ACTIVE on attempt 1 but ingress URL absent; exited immediately instead of polling |
+| Production digest | Still `sha256:8ef3c63a…` (prior deploy) |
+
+### Phase 6A health-gate fix (pending merge)
+
+| Field | Result |
+|-------|--------|
+| Branch | `fix/deployment-health-gate` |
+| Fix | `deploy/aws/wait-for-production-health.sh` — separate ACTIVE / URL / health polling with bounded retries |
+| Automated health gate | **Pending** — awaiting merge + green deploy workflow |
+
 ## Health and availability evidence
 
-Verified against **deployed** image `1beb93d7…` on 2026-07-20:
+Verified against **deployed** image `sha256:8ef3c63a…` on 2026-07-20 (Phase 6A):
 
 | Check | Result |
 |-------|--------|
@@ -87,7 +107,34 @@ Verified against **deployed** image `1beb93d7…` on 2026-07-20:
 | Network | Residential ISP; public DNS |
 | Test data | Synthetic public coordinates only |
 
-## Browser acceptance results
+## Browser acceptance results (Phase 6A — live production)
+
+| Step | Result |
+|------|--------|
+| 1 HTTPS page loads | **Pass** |
+| 2 Map tiles appear | **Pass** (Mapbox GL canvas + tile requests) |
+| 3 Three stops added | **Pass** (Federation Square; Flinders St; Melbourne Central) |
+| 4 Address suggestions | **Pass** (Mapbox Search Box autocomplete) |
+| 5 Select valid suggestions | **Pass** |
+| 6 FIFO / optimised routes | **Pass** (`/api/optimize` + `/api/route` ×2) |
+| 7 Mapbox road routing | **Pass** (`routeSource: mapbox`, no fallback banner) |
+| 8 Route markers | **Pass** (origin + 3 stops) |
+| 9 Route line | **Pass** (road polyline rendered) |
+| 10 Select FIFO route | **Pass** |
+| 11 Start driver mode | **Pass** (Skip location path) |
+| 12 Current stop | **Pass** |
+| 13 Upcoming-stops drawer | **Pass** |
+| 14–17 Stop completion / trip complete | **Pass** (3/3 stops) |
+| 18 Mobile 390×844 | **Pass** |
+| 19 No horizontal overflow | **Pass** |
+| 20 No fatal console error | **Pass** |
+| 21 No request loop | **Pass** |
+
+**Automated production suite:** `npm run test:e2e:production` — **5/5 passed** (Playwright 1.61.1, Chromium, Node 22.17.1).
+
+**Sanitised network notes:** occasional `ERR_ABORTED` on Mapbox vector tiles during map pan — benign; not counted as failure.
+
+## Browser acceptance results (Phase 5C — prior)
 
 | Step | Result |
 |------|--------|
@@ -106,7 +153,7 @@ Verified against **deployed** image `1beb93d7…` on 2026-07-20:
 | 13 No fatal console error | **Pass** (homepage smoke) |
 | 14 No request loop | **Pass** (homepage smoke) |
 
-**Automated production smoke:** `npx playwright test --config=playwright.production.config.ts` — **3/3 passed**.
+**Automated production smoke (prior):** `npx playwright test --config=playwright.production.config.ts` — **3/3 passed**.
 
 **Console / network:** No token values logged. No fatal `pageerror` events on homepage load.
 
@@ -195,17 +242,28 @@ Scan COMPLETE @ 2026-07-20. Counts unchanged; finding mix shifted (Debian `perl`
 | NAT Gateway | **None** (SafeRoute-tagged) |
 | Teardown script default | **Dry-run** |
 
+**OIDC rollback workflow exists on `chore/release-baseline` only.** GitHub `workflow_dispatch` for `.github/workflows/rollback.yml` is **not available on `main`** (404) until the release branch is merged. PowerShell `deploy/aws/rollback.ps1` remains operational.
+
+## Demonstration preparation (Phase 6A)
+
+| Deliverable | Status |
+|-------------|--------|
+| `docs/user-testing-plan.md` | **Created** — no participant results |
+| `docs/route-benchmark-plan.md` | **Created** — no benchmark figures |
+| Full production browser journey | **Pass** (see above) |
+| Automated deploy health gate | **Pending merge** of `fix/deployment-health-gate` |
+
 ## Manual limitations
 
-1. **Mapbox token URL restrictions** — requires Mapbox account administrator.
-2. **Full production driver journey** — not run against live URL (covered by mocked local e2e).
-3. **OIDC ECS deploy via Actions** — pending merge of `fix/cd-deploy-rerun` for immutable-tag reruns.
-4. **Campus DNS** — Monash recursive DNS may NXDOMAIN `*.on.aws`; use public resolver.
+1. **Mapbox token URL restrictions** — requires Mapbox account administrator (see below).
+2. **OIDC rollback workflow_dispatch** — unavailable until `rollback.yml` is on default branch.
+3. **Campus DNS** — Monash recursive DNS may NXDOMAIN `*.on.aws`; use public resolver.
+4. **CD not fully green** — deploy health step must pass in Actions after health-gate merge.
 
 ## Production acceptance decision
 
 **Conditionally accepted for controlled portfolio demonstration**
 
-Evidence supports HTTPS availability, Mapbox server routing, full OIDC CD through ECS update (commit `b7eac88`), operator-validated rollback, and automated test baselines. **Remaining blockers:** Mapbox public URL restrictions and full production driver-journey browser pass.
+Evidence supports HTTPS availability, Mapbox tiles/autocomplete/road routing on production, full planning→driver journey (Playwright), operator-validated rollback, and automated test baselines. **Remaining blockers:** Mapbox public URL restrictions, fully green CD workflow (health gate merge), and user-testing / benchmark execution.
 
 This is **not** enterprise production-ready.

@@ -6,13 +6,13 @@ const PRODUCTION_URL =
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'production-smoke.spec.ts',
+  testMatch: ['production-smoke.spec.ts', 'production-journey.spec.ts'],
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  timeout: 60_000,
-  expect: { timeout: 20_000 },
+  timeout: 120_000,
+  expect: { timeout: 30_000 },
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: PRODUCTION_URL,

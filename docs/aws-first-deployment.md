@@ -135,16 +135,28 @@ Deletes only SafeRoute-named resources (Express service, ECR `saferoute`, log gr
 5. JSON-object Secrets Manager value caused Mapbox fallback until replaced with a plain-string secret.
 6. Campus DNS does not resolve `*.on.aws` (public DNS does).
 
+## Phase 6A — deployment health gate (2026-07-20)
+
+| Item | Detail |
+|------|--------|
+| Root cause | ECS Express reports `ACTIVE` before `ingressPaths[].endpoint` is populated; workflow exited on first ACTIVE without URL |
+| Fix | `deploy/aws/wait-for-production-health.sh` — bounded polling for ACTIVE → URL → `/api/health` |
+| Branch | `fix/deployment-health-gate` → PR into `chore/release-baseline` |
+| Production journey | `e2e/production-journey.spec.ts` — 5/5 production Playwright tests passing locally |
+| User testing plan | `docs/user-testing-plan.md` (no results yet) |
+| Route benchmark plan | `docs/route-benchmark-plan.md` (no figures yet) |
+
 ## Remaining manual checks
 
 * [x] PR #4 merged into `chore/release-baseline` (merge `c71548f`, 2026-07-20)
 * [x] First CD workflow triggered — validate/e2e/deploy jobs ran; deploy failed on missing `ecs:RegisterTaskDefinition` (see `docs/production-acceptance.md`)
 * [x] Production API health + Mapbox routing verified on current serving image
 * [x] Production Playwright smoke (3 tests) passed locally
-* [ ] Apply updated GitHub deploy IAM policy (`deploy/aws/apply-github-deploy-policy.ps1`) and re-run CD deploy job
+* [x] GitHub deploy IAM policy applied (`deploy/aws/apply-github-deploy-policy.ps1`)
+* [x] Full production browser journey (plan → driver → complete) @ Phase 6A
+* [ ] Merge `fix/deployment-health-gate` and confirm deploy health step green in Actions
 * [ ] Restrict Mapbox public token URL origins to the Express HTTPS host (+ localhost for dev)
 * [ ] Confirm GitHub Environment protection rules (reviewer / wait timer) if desired
-* [ ] Merge `fix/production-security-closure` and verify ECS serves new digest after CD success
 
 ## Phase 5B — PR #4 merge and first CD (2026-07-20)
 
