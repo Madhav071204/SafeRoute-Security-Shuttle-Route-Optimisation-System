@@ -1,6 +1,13 @@
 # SafeRoute User Testing Plan
 
-Phase 6A preparation document — **no participant results recorded yet**.
+Phase 6A preparation document.
+
+**Status (2026-07-21):** Formal structured user testing was **not** conducted (time constraint). The only validation outside automated tests is:
+
+* Owner manual testing of the production application
+* Informal peer sharing / informal review with friends
+
+No structured participant tasks, timings, surveys, or feedback records were collected. Do not treat informal sharing as formal user testing.
 
 ## Objective
 

@@ -248,8 +248,8 @@ Scan COMPLETE @ 2026-07-20. Counts unchanged; finding mix shifted (Debian `perl`
 
 | Deliverable | Status |
 |-------------|--------|
-| `docs/user-testing-plan.md` | **Created** — no participant results |
-| `docs/route-benchmark-plan.md` | **Created** — no benchmark figures |
+| `docs/user-testing-plan.md` | **Created** — no formal sessions; informal peer sharing only |
+| `docs/route-benchmark-plan.md` | **Created** — six-scenario subset executed (see `route-benchmark-results.md`) |
 | Full production browser journey | **Pass** (see above) |
 | Automated deploy health gate | **Pass** — [CI run 29729117102](https://github.com/Madhav071204/SafeRoute-Security-Shuttle-Route-Optimisation-System/actions/runs/29729117102) @ `521e716` |
 
@@ -258,12 +258,13 @@ Scan COMPLETE @ 2026-07-20. Counts unchanged; finding mix shifted (Debian `perl`
 1. **Separate localhost Mapbox dev token** — confirm a distinct public token restricted to `http://localhost:3000/*` if local development uses Mapbox directly.
 2. **OIDC rollback workflow_dispatch** — unavailable until `rollback.yml` is on default branch.
 3. **Campus DNS** — Monash recursive DNS may NXDOMAIN `*.on.aws`; use public resolver.
-4. **User-testing and benchmark execution** — plans prepared; no sessions or figures recorded yet.
+4. **Formal structured user testing** — not conducted; informal peer sharing only (see `user-testing-plan.md`).
+5. **Benchmark** — six Mapbox road scenarios recorded in `route-benchmark-results.md` (illustrative, not operational proof).
 
 ## Production acceptance decision
 
 **Conditionally accepted for controlled portfolio demonstration**
 
-Evidence supports HTTPS availability, Mapbox tiles/autocomplete/road routing on production, production public token URL restriction (operator-confirmed), fully green OIDC CD with automated health gate, full planning→driver journey (Playwright), operator-validated rollback, and automated test baselines. **Remaining before stronger acceptance:** user-testing and benchmark execution.
+Evidence supports HTTPS availability, Mapbox tiles/autocomplete/road routing on production, production public token URL restriction (operator-confirmed), fully green OIDC CD with automated health gate, full planning→driver journey (Playwright), operator-validated rollback, automated test baselines, and a six-scenario road-route benchmark. Formal structured user testing was not performed.
 
 This is **not** enterprise production-ready.
