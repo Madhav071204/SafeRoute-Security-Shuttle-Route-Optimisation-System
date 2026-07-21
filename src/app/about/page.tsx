@@ -29,7 +29,7 @@ export default function AboutPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-surface-900 dark:text-white">About SafeRoute</h1>
           <p className="text-surface-600 dark:text-surface-400 mt-2">
-            Learn about how SafeRoute optimizes shuttle routes
+            Personal proof-of-concept comparing FIFO and nearest-neighbour stop ordering
           </p>
         </div>
         
@@ -50,16 +50,17 @@ export default function AboutPage() {
                   </div>
                   <div>
                     <CardTitle>What is SafeRoute?</CardTitle>
-                    <CardDescription>AI-powered route optimization</CardDescription>
+                    <CardDescription>Compare FIFO and heuristic route ordering</CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
                 <p className="text-surface-600 dark:text-surface-400 leading-relaxed">
-                  SafeRoute is a route optimization tool designed for university security shuttles. 
-                  Instead of dropping students off in the order they boarded (FIFO), SafeRoute calculates 
-                  a more efficient route that minimizes total travel distance and time, reducing fuel costs
-                  and carbon emissions.
+                  SafeRoute is a personal proof-of-concept inspired by university security-shuttle drop-offs.
+                  Instead of dropping passengers off only in boarding order (FIFO), SafeRoute also builds a
+                  nearest-neighbour reorder so you can compare road distance and duration side by side.
+                  Results vary by scenario and may potentially reduce unnecessary travel — they are not a
+                  fuel-saving or emissions claim.
                 </p>
               </CardContent>
             </Card>
@@ -105,9 +106,9 @@ export default function AboutPage() {
                       <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                     <p className="text-sm text-warning-800 dark:text-warning-300">
-                      <strong>Note:</strong> This is a heuristic algorithm that finds good solutions quickly, 
-                      but it does not guarantee the absolute optimal route. In practice, it typically 
-                      reduces distance by 15-35% compared to FIFO ordering.
+                      <strong>Note:</strong> Nearest neighbour is a heuristic. It does not guarantee the
+                      globally shortest road route. Illustrative benchmark results vary by scenario;
+                      duration can be worse even when distance improves.
                     </p>
                   </div>
                 </div>
@@ -136,13 +137,15 @@ export default function AboutPage() {
                     <svg className="w-4 h-4 text-success-500" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    SafeRoute does not store your trip data
+                    SafeRoute stores some data in your browser
                   </h4>
                   <ul className="space-y-2 ml-6">
                     {[
-                      'Passenger addresses are held in browser memory only',
-                      'Addresses are cleared when you close the browser tab',
-                      'No addresses are saved to your device or our servers',
+                      'SafeRoute is a proof-of-concept — avoid entering real or sensitive passenger information',
+                      'Trip history, ride requests, settings, and the active dispatch trip may be saved in browser localStorage',
+                      'Saved data may remain after you close the tab or browser and has no automatic expiry',
+                      'The active dispatch trip may include driver location coordinates',
+                      'Data stays on this device (not a first-party server) and can be removed using browser storage controls',
                     ].map((item, index) => (
                       <li key={index} className="text-surface-600 dark:text-surface-400 text-sm flex items-start gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-surface-400 mt-2 flex-shrink-0" />

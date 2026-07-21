@@ -2,18 +2,35 @@ import { Coordinates, GeocodeResult } from '@/types'
 
 const MAPBOX_BASE_URL = 'https://api.mapbox.com'
 
+const PLACEHOLDER_TOKENS = new Set([
+  'your_mapbox_public_token_here',
+  'your_mapbox_server_token_here',
+])
+
 /**
- * Get the Mapbox access token from environment variables.
- * Throws an error if not configured.
+ * Resolve the server-side Mapbox access token.
+ *
+ * Preference order:
+ * 1. `MAPBOX_ACCESS_TOKEN` — server-only (never bundled into the browser)
+ * 2. `NEXT_PUBLIC_MAPBOX_TOKEN` — documented development/fallback only
+ *
+ * Client Mapbox GL must continue to use `NEXT_PUBLIC_MAPBOX_TOKEN` directly.
+ * Neither token value is returned in API error responses.
  */
 export function getMapboxToken(): string {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-  if (!token || token === 'your_mapbox_public_token_here') {
-    throw new Error(
-      'Mapbox token not configured. Please add your token to .env.local'
-    )
+  const serverToken = process.env.MAPBOX_ACCESS_TOKEN?.trim()
+  if (serverToken && !PLACEHOLDER_TOKENS.has(serverToken)) {
+    return serverToken
   }
-  return token
+
+  const publicToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim()
+  if (publicToken && !PLACEHOLDER_TOKENS.has(publicToken)) {
+    return publicToken
+  }
+
+  throw new Error(
+    'Mapbox token not configured. Set MAPBOX_ACCESS_TOKEN (preferred) or NEXT_PUBLIC_MAPBOX_TOKEN in the server environment.'
+  )
 }
 
 /**

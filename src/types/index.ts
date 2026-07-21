@@ -46,12 +46,19 @@ export interface RouteMetrics {
   estimatedFuelCostAud: number
 }
 
+// Identifies how a route's distance/duration were produced.
+//  - 'mapbox':            real road-network routing from Mapbox Directions.
+//  - 'haversine-fallback': straight-line estimate used when Mapbox is unavailable.
+//  - 'none':              no route was generated (e.g. empty stop order).
+export type RouteSource = 'mapbox' | 'haversine-fallback' | 'none'
+
 export interface Route {
   type: 'fifo' | 'optimized'
   orderedStopIds: string[]
   polyline: string
   legs: RouteLeg[]
   metrics: RouteMetrics
+  source?: RouteSource
 }
 
 export interface Settings {
@@ -118,6 +125,10 @@ export interface RouteResponse {
   legs: RouteLeg[]
   totalDistanceKm: number
   totalDurationMinutes: number
+  // Explicit provenance so the client never mistakes a straight-line estimate
+  // for real road-network routing.
+  routeSource: RouteSource
+  isFallback: boolean
 }
 
 // Navigation types for turn-by-turn directions

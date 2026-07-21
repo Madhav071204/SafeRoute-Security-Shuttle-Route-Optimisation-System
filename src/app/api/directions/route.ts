@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMapboxToken } from '@/lib/mapbox'
 import { Coordinates, DirectionRoute, NavigationStep, DirectionLeg } from '@/types'
+import { isValidCoordinates } from '@/lib/validation'
 
 const MAPBOX_DIRECTIONS_URL = 'https://api.mapbox.com/directions/v5/mapbox/driving-traffic'
-
-interface DirectionsRequestBody {
-  origin: Coordinates
-  destination: Coordinates
-  waypoints?: Coordinates[]
-}
 
 interface MapboxStep {
   maneuver: {
@@ -85,21 +80,36 @@ function parseRoute(mapboxRoute: MapboxRoute): DirectionRoute {
 
 export async function POST(request: NextRequest) {
   try {
-    const body: DirectionsRequestBody = await request.json()
+    const body = (await request.json()) as {
+      origin: unknown
+      destination: unknown
+      waypoints?: unknown
+    }
     const { origin, destination, waypoints } = body
 
-    if (!origin || typeof origin.lat !== 'number' || typeof origin.lng !== 'number') {
+    if (!isValidCoordinates(origin)) {
       return NextResponse.json(
         { success: false, error: 'Invalid origin coordinates' },
         { status: 400 }
       )
     }
 
-    if (!destination || typeof destination.lat !== 'number' || typeof destination.lng !== 'number') {
+    if (!isValidCoordinates(destination)) {
       return NextResponse.json(
         { success: false, error: 'Invalid destination coordinates' },
         { status: 400 }
       )
+    }
+
+    let safeWaypoints: Coordinates[] = []
+    if (waypoints !== undefined) {
+      if (!Array.isArray(waypoints) || !waypoints.every(isValidCoordinates)) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid waypoint coordinates' },
+          { status: 400 }
+        )
+      }
+      safeWaypoints = waypoints
     }
 
     let token: string
@@ -114,8 +124,8 @@ export async function POST(request: NextRequest) {
 
     // Build coordinates string: origin;waypoint1;waypoint2;...;destination
     const coords: Coordinates[] = [origin]
-    if (waypoints && waypoints.length > 0) {
-      coords.push(...waypoints)
+    if (safeWaypoints.length > 0) {
+      coords.push(...safeWaypoints)
     }
     coords.push(destination)
 

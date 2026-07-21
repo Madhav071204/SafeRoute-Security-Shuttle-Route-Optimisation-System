@@ -1,18 +1,12 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
 import { TripProvider } from '@/context/TripContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { AppLayout } from '@/components/layout/AppLayout'
 
-const inter = Inter({ 
-  subsets: ['latin'],
-  variable: '--font-inter',
-})
-
 export const metadata: Metadata = {
-  title: 'SafeRoute - AI-Powered Route Optimization',
-  description: 'Intelligent security shuttle route optimization for university campuses. Save time, fuel, and reduce emissions with smart routing.',
+  title: 'SafeRoute - Security Shuttle Route Comparison',
+  description: 'Personal proof-of-concept comparing FIFO and nearest-neighbour stop ordering for security-shuttle style trips. Not an official campus system.',
 }
 
 export default function RootLayout({
@@ -23,6 +17,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -40,7 +40,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} font-sans`}>
+      <body className="font-sans">
         <ThemeProvider>
           <TripProvider>
             <AppLayout>

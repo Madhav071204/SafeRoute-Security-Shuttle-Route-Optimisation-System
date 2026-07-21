@@ -10,8 +10,8 @@ interface StopWithCoordinates {
  * Nearest-neighbor heuristic for route optimization.
  * 
  * This is a greedy algorithm that builds a route by always visiting
- * the closest unvisited stop. It does NOT guarantee the optimal solution,
- * but typically produces routes within 10-25% of optimal.
+ * the closest unvisited stop. It does NOT guarantee a globally optimal
+ * tour; results vary by stop layout and can be worse than FIFO on some metrics.
  * 
  * Time complexity: O(n²)
  * 

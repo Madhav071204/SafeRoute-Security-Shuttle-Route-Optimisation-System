@@ -26,8 +26,15 @@ export const DEFAULT_SETTINGS: Settings = {
 export const LOCATION_TIMEOUT_MS = 6000
 
 // Constraints
-export const MAX_STOPS = 15
+// A trip supports at most 15 passenger destinations. The origin is a separate
+// field and never counts toward this limit. `MAX_STOPS` is kept as a backward-
+// compatible alias so there is a single source of truth for the value.
+export const MAX_DESTINATIONS = 15
+export const MAX_STOPS = MAX_DESTINATIONS
 export const MIN_STOPS_FOR_OPTIMIZATION = 2
+
+// Maximum accepted length for a single geocoding address string.
+export const MAX_ADDRESS_LENGTH = 250
 
 // Map defaults
 export const DEFAULT_MAP_CENTER: Coordinates = DEFAULT_ORIGIN_COORDINATES

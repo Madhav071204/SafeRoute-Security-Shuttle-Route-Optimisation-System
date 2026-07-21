@@ -1,0 +1,90 @@
+name: Rollback production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: 'ECR image digest (sha256:...) from repository saferoute'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Rollback ECS Express Mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      ECS_EXPRESS_SERVICE_NAME: ${{ vars.ECS_EXPRESS_SERVICE_NAME }}
+      ECS_EXPRESS_SERVICE_ARN: ${{ vars.ECS_EXPRESS_SERVICE_ARN }}
+      ECS_EXPRESS_SERVICE_URL: ${{ vars.ECS_EXPRESS_SERVICE_URL }}
+      HEALTH_CHECK_PATH: ${{ vars.HEALTH_CHECK_PATH }}
+
+    steps:
+      - name: Validate digest format
+        run: |
+          set -euo pipefail
+          DIGEST="${{ inputs.image_digest }}"
+          echo "$DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm digest belongs to SafeRoute ECR repo
+        id: image
+        run: |
+          set -euo pipefail
+          DIGEST="${{ inputs.image_digest }}"
+          aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids "imageDigest=${DIGEST}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text
+          REGISTRY="$(aws ecr describe-repositories \
+            --repository-names "${ECR_REPOSITORY}" \
+            --query 'repositories[0].repositoryUri' \
+            --output text | cut -d/ -f1)"
+          echo "image_ref=${REGISTRY}/${ECR_REPOSITORY}@${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Express Mode service to digest
+        env:
+          SECRET_ARN: ${{ vars.MAPBOX_SECRET_ARN }}
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          PRIMARY=$(jq -n \
+            --arg image "$IMAGE_REF" \
+            --arg secret "$SECRET_ARN" \
+            '{
+              image: $image,
+              containerPort: 3000,
+              awsLogsConfiguration: { logGroup: "/ecs/saferoute-web", logStreamPrefix: "ecs" },
+              environment: [{ name: "NODE_ENV", value: "production" }],
+              secrets: [{ name: "MAPBOX_ACCESS_TOKEN", valueFrom: $secret }]
+            }')
+          aws ecs update-express-gateway-service \
+            --service-arn "${ECS_EXPRESS_SERVICE_ARN}" \
+            --primary-container "${PRIMARY}" \
+            --region "${AWS_REGION}"
+
+      - name: Wait for ACTIVE and verify health
+        run: |
+          set -euo pipefail
+          chmod +x deploy/aws/wait-for-production-health.sh
+          deploy/aws/wait-for-production-health.sh

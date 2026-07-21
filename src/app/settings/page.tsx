@@ -220,9 +220,11 @@ export default function SettingsPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-medium text-surface-900 dark:text-white">Settings Storage</p>
+                <p className="text-sm font-medium text-surface-900 dark:text-white">Data storage</p>
                 <p className="text-xs text-surface-500 dark:text-surface-400 mt-1">
-                  Settings are saved to your browser and persist across sessions. Trip data (addresses) is never stored.
+                  Settings, trip history, ride requests, and the active dispatch trip are saved in your browser and may
+                  remain after you close it. This is a proof-of-concept, so avoid entering real passenger details, and
+                  clear saved data using your browser storage controls.
                 </p>
               </div>
             </div>

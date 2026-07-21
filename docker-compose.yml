@@ -1,13 +1,18 @@
-# SafeRoute — local Docker Compose setup
+# SafeRoute — local production-style Docker Compose setup
 #
 # Quick start:
 #   1. cp .env.example .env.local
-#   2. Add your Mapbox token to .env.local
-#   3. docker compose up --build
+#   2. Add Mapbox tokens to .env.local (see comments in .env.example)
+#   3. docker compose --env-file .env.local up --build
 #   4. Open http://localhost:3000
 #
-# Note: NEXT_PUBLIC_* variables are baked into the client bundle at image build
-# time. If you change .env.local, rebuild with: docker compose up --build
+# Notes:
+#   - NEXT_PUBLIC_* variables are baked into the client bundle at image build
+#     time. If you change NEXT_PUBLIC_MAPBOX_TOKEN, rebuild with --build.
+#   - MAPBOX_ACCESS_TOKEN is a runtime-only server secret (not baked into layers).
+#   - TLS verification remains enabled. Do not set INSECURE_NPM_SSL or disable
+#     NODE_TLS_REJECT_UNAUTHORIZED. For corporate CAs, use NODE_EXTRA_CA_CERTS
+#     pointing at an approved CA file outside the repository.
 
 services:
   app:
@@ -15,9 +20,11 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        # Build-time arg — required for maps and geocoding in the browser bundle.
-        NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN}
-    image: saferoute:latest
+        # Build-time public token for the browser Mapbox GL bundle only.
+        NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN:-}
+        GIT_REVISION: ${GIT_REVISION:-local}
+        BUILD_DATE: ${BUILD_DATE:-}
+    image: saferoute:phase4
     container_name: saferoute-app
     ports:
       - "3000:3000"
@@ -26,8 +33,11 @@ services:
         required: false
     environment:
       NODE_ENV: production
-      # Runtime env for server-side API routes (client bundle still uses build-time value).
-      NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN}
+      # Server-side Mapbox (geocoding / routing / directions). Prefer this over
+      # falling back to the public token. Never bake it into the image layers.
+      MAPBOX_ACCESS_TOKEN: ${MAPBOX_ACCESS_TOKEN:-}
+      # Optional approved CA bundle for TLS interception environments.
+      # NODE_EXTRA_CA_CERTS: /path/inside/container/only-if-you-mount-it
     restart: unless-stopped
     healthcheck:
       test:
@@ -35,7 +45,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "require('http').get('http://127.0.0.1:3000/', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))",
+          "require('http').get('http://127.0.0.1:3000/api/health', (r) => { let d=''; r.on('data', c => d+=c); r.on('end', () => process.exit(r.statusCode===200 ? 0 : 1)); }).on('error', () => process.exit(1))",
         ]
       interval: 30s
       timeout: 5s
