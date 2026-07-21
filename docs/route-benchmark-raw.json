@@ -1,0 +1,434 @@
+{
+  "base": "https://sa-2cf22f7190f04affacba88ff88c8e636.ecs.ap-southeast-2.on.aws",
+  "origin": {
+    "label": "Monash University Clayton",
+    "coordinates": {
+      "lat": -37.9105,
+      "lng": 145.1363
+    }
+  },
+  "coordinateSource": "Fixed public landmark coordinates (Mapbox Geocoding abbreviated station queries were unreliable)",
+  "percentageFormula": "percentageDifference = ((FIFO - nearestNeighbour) / FIFO) * 100; positive means NN shorter/faster than FIFO",
+  "results": [
+    {
+      "id": "B01",
+      "planId": "S08",
+      "rationale": "Already near-efficient FIFO order",
+      "origin": "Monash University Clayton",
+      "destinations": [
+        "Syndal Station, Glen Waverley VIC",
+        "Glen Waverley Station, Glen Waverley VIC",
+        "Mount Waverley Station, Mount Waverley VIC",
+        "Clayton Station, Clayton VIC",
+        "Oakleigh Station, Oakleigh VIC",
+        "Huntingdale Station, Huntingdale VIC"
+      ],
+      "stopCoordinates": [
+        {
+          "id": "stop_1",
+          "label": "Syndal Station, Glen Waverley VIC",
+          "lat": -37.8762,
+          "lng": 145.1489
+        },
+        {
+          "id": "stop_2",
+          "label": "Glen Waverley Station, Glen Waverley VIC",
+          "lat": -37.8795,
+          "lng": 145.162
+        },
+        {
+          "id": "stop_3",
+          "label": "Mount Waverley Station, Mount Waverley VIC",
+          "lat": -37.8753,
+          "lng": 145.1282
+        },
+        {
+          "id": "stop_4",
+          "label": "Clayton Station, Clayton VIC",
+          "lat": -37.9248,
+          "lng": 145.1205
+        },
+        {
+          "id": "stop_5",
+          "label": "Oakleigh Station, Oakleigh VIC",
+          "lat": -37.9004,
+          "lng": 145.0884
+        },
+        {
+          "id": "stop_6",
+          "label": "Huntingdale Station, Huntingdale VIC",
+          "lat": -37.9107,
+          "lng": 145.1024
+        }
+      ],
+      "stopCount": 6,
+      "fifoOrder": [
+        "stop_1",
+        "stop_2",
+        "stop_3",
+        "stop_4",
+        "stop_5",
+        "stop_6"
+      ],
+      "nnOrder": [
+        "stop_4",
+        "stop_6",
+        "stop_5",
+        "stop_3",
+        "stop_1",
+        "stop_2"
+      ],
+      "available": true,
+      "fifoDistanceKm": 27.08,
+      "nnDistanceKm": 21.53,
+      "fifoDurationMin": 64.43,
+      "nnDurationMin": 57.39,
+      "absDistanceDiffKm": 5.55,
+      "pctDistanceDiff": 20.49,
+      "absDurationDiffMin": 7.04,
+      "pctDurationDiff": 10.93,
+      "routeSource": "mapbox",
+      "timestamp": "2026-07-21T01:54:16.681Z",
+      "notes": "",
+      "retries": {
+        "fifo": 0,
+        "nn": 0
+      }
+    },
+    {
+      "id": "B02",
+      "planId": "S09",
+      "rationale": "Intentionally inefficient FIFO order",
+      "origin": "Monash University Clayton",
+      "destinations": [
+        "Huntingdale Station, Huntingdale VIC",
+        "Oakleigh Station, Oakleigh VIC",
+        "Clayton Station, Clayton VIC",
+        "Mount Waverley Station, Mount Waverley VIC",
+        "Glen Waverley Station, Glen Waverley VIC",
+        "Syndal Station, Glen Waverley VIC"
+      ],
+      "stopCoordinates": [
+        {
+          "id": "stop_1",
+          "label": "Huntingdale Station, Huntingdale VIC",
+          "lat": -37.9107,
+          "lng": 145.1024
+        },
+        {
+          "id": "stop_2",
+          "label": "Oakleigh Station, Oakleigh VIC",
+          "lat": -37.9004,
+          "lng": 145.0884
+        },
+        {
+          "id": "stop_3",
+          "label": "Clayton Station, Clayton VIC",
+          "lat": -37.9248,
+          "lng": 145.1205
+        },
+        {
+          "id": "stop_4",
+          "label": "Mount Waverley Station, Mount Waverley VIC",
+          "lat": -37.8753,
+          "lng": 145.1282
+        },
+        {
+          "id": "stop_5",
+          "label": "Glen Waverley Station, Glen Waverley VIC",
+          "lat": -37.8795,
+          "lng": 145.162
+        },
+        {
+          "id": "stop_6",
+          "label": "Syndal Station, Glen Waverley VIC",
+          "lat": -37.8762,
+          "lng": 145.1489
+        }
+      ],
+      "stopCount": 6,
+      "fifoOrder": [
+        "stop_1",
+        "stop_2",
+        "stop_3",
+        "stop_4",
+        "stop_5",
+        "stop_6"
+      ],
+      "nnOrder": [
+        "stop_3",
+        "stop_1",
+        "stop_2",
+        "stop_4",
+        "stop_6",
+        "stop_5"
+      ],
+      "available": true,
+      "fifoDistanceKm": 25.21,
+      "nnDistanceKm": 21.53,
+      "fifoDurationMin": 62.73,
+      "nnDurationMin": 57.39,
+      "absDistanceDiffKm": 3.68,
+      "pctDistanceDiff": 14.6,
+      "absDurationDiffMin": 5.34,
+      "pctDurationDiff": 8.51,
+      "routeSource": "mapbox",
+      "timestamp": "2026-07-21T01:54:21.029Z",
+      "notes": "",
+      "retries": {
+        "fifo": 0,
+        "nn": 0
+      }
+    },
+    {
+      "id": "B03",
+      "planId": "S02",
+      "rationale": "Clustered destinations along one corridor",
+      "origin": "Monash University Clayton",
+      "destinations": [
+        "Glen Waverley Station, Glen Waverley VIC",
+        "Mount Waverley Station, Mount Waverley VIC",
+        "Syndal Station, Glen Waverley VIC"
+      ],
+      "stopCoordinates": [
+        {
+          "id": "stop_1",
+          "label": "Glen Waverley Station, Glen Waverley VIC",
+          "lat": -37.8795,
+          "lng": 145.162
+        },
+        {
+          "id": "stop_2",
+          "label": "Mount Waverley Station, Mount Waverley VIC",
+          "lat": -37.8753,
+          "lng": 145.1282
+        },
+        {
+          "id": "stop_3",
+          "label": "Syndal Station, Glen Waverley VIC",
+          "lat": -37.8762,
+          "lng": 145.1489
+        }
+      ],
+      "stopCount": 3,
+      "fifoOrder": [
+        "stop_1",
+        "stop_2",
+        "stop_3"
+      ],
+      "nnOrder": [
+        "stop_3",
+        "stop_1",
+        "stop_2"
+      ],
+      "available": true,
+      "fifoDistanceKm": 14.24,
+      "nnDistanceKm": 11.6,
+      "fifoDurationMin": 31.85,
+      "nnDurationMin": 29.04,
+      "absDistanceDiffKm": 2.64,
+      "pctDistanceDiff": 18.54,
+      "absDurationDiffMin": 2.81,
+      "pctDurationDiff": 8.82,
+      "routeSource": "mapbox",
+      "timestamp": "2026-07-21T01:54:24.609Z",
+      "notes": "",
+      "retries": {
+        "fifo": 0,
+        "nn": 0
+      }
+    },
+    {
+      "id": "B04",
+      "planId": "S06",
+      "rationale": "Destinations distributed around the origin",
+      "origin": "Monash University Clayton",
+      "destinations": [
+        "Glen Waverley Station, Glen Waverley VIC",
+        "Mount Waverley Station, Mount Waverley VIC",
+        "Syndal Station, Glen Waverley VIC",
+        "Clayton Station, Clayton VIC",
+        "Oakleigh Station, Oakleigh VIC"
+      ],
+      "stopCoordinates": [
+        {
+          "id": "stop_1",
+          "label": "Glen Waverley Station, Glen Waverley VIC",
+          "lat": -37.8795,
+          "lng": 145.162
+        },
+        {
+          "id": "stop_2",
+          "label": "Mount Waverley Station, Mount Waverley VIC",
+          "lat": -37.8753,
+          "lng": 145.1282
+        },
+        {
+          "id": "stop_3",
+          "label": "Syndal Station, Glen Waverley VIC",
+          "lat": -37.8762,
+          "lng": 145.1489
+        },
+        {
+          "id": "stop_4",
+          "label": "Clayton Station, Clayton VIC",
+          "lat": -37.9248,
+          "lng": 145.1205
+        },
+        {
+          "id": "stop_5",
+          "label": "Oakleigh Station, Oakleigh VIC",
+          "lat": -37.9004,
+          "lng": 145.0884
+        }
+      ],
+      "stopCount": 5,
+      "fifoOrder": [
+        "stop_1",
+        "stop_2",
+        "stop_3",
+        "stop_4",
+        "stop_5"
+      ],
+      "nnOrder": [
+        "stop_4",
+        "stop_5",
+        "stop_2",
+        "stop_3",
+        "stop_1"
+      ],
+      "available": true,
+      "fifoDistanceKm": 28.02,
+      "nnDistanceKm": 21.5,
+      "fifoDurationMin": 61.55,
+      "nnDurationMin": 51.97,
+      "absDistanceDiffKm": 6.52,
+      "pctDistanceDiff": 23.27,
+      "absDurationDiffMin": 9.58,
+      "pctDurationDiff": 15.56,
+      "routeSource": "mapbox",
+      "timestamp": "2026-07-21T01:54:28.393Z",
+      "notes": "",
+      "retries": {
+        "fifo": 0,
+        "nn": 0
+      }
+    },
+    {
+      "id": "B05",
+      "planId": "S04",
+      "rationale": "One distant outlier",
+      "origin": "Monash University Clayton",
+      "destinations": [
+        "Brighton Beach Station, Brighton VIC",
+        "Frankston Station, Frankston VIC",
+        "Dandenong Plaza, Dandenong VIC"
+      ],
+      "stopCoordinates": [
+        {
+          "id": "stop_1",
+          "label": "Brighton Beach Station, Brighton VIC",
+          "lat": -37.9265,
+          "lng": 144.989
+        },
+        {
+          "id": "stop_2",
+          "label": "Frankston Station, Frankston VIC",
+          "lat": -38.143,
+          "lng": 145.123
+        },
+        {
+          "id": "stop_3",
+          "label": "Dandenong Plaza, Dandenong VIC",
+          "lat": -37.9875,
+          "lng": 145.2145
+        }
+      ],
+      "stopCount": 3,
+      "fifoOrder": [
+        "stop_1",
+        "stop_2",
+        "stop_3"
+      ],
+      "nnOrder": [
+        "stop_3",
+        "stop_2",
+        "stop_1"
+      ],
+      "available": true,
+      "fifoDistanceKm": 78.07,
+      "nnDistanceKm": 72.54,
+      "fifoDurationMin": 94.32,
+      "nnDurationMin": 81.66,
+      "absDistanceDiffKm": 5.53,
+      "pctDistanceDiff": 7.08,
+      "absDurationDiffMin": 12.66,
+      "pctDurationDiff": 13.42,
+      "routeSource": "mapbox",
+      "timestamp": "2026-07-21T01:54:32.295Z",
+      "notes": "",
+      "retries": {
+        "fifo": 0,
+        "nn": 0
+      }
+    },
+    {
+      "id": "B06",
+      "planId": "S05",
+      "rationale": "Duplicate destinations (separate passengers)",
+      "origin": "Monash University Clayton",
+      "destinations": [
+        "Chadstone Shopping Centre, Chadstone VIC",
+        "Chadstone Shopping Centre, Chadstone VIC",
+        "Glen Waverley Station, Glen Waverley VIC"
+      ],
+      "stopCoordinates": [
+        {
+          "id": "stop_1",
+          "label": "Chadstone Shopping Centre, Chadstone VIC",
+          "lat": -37.8875,
+          "lng": 145.083
+        },
+        {
+          "id": "stop_2",
+          "label": "Chadstone Shopping Centre, Chadstone VIC",
+          "lat": -37.8875,
+          "lng": 145.083
+        },
+        {
+          "id": "stop_3",
+          "label": "Glen Waverley Station, Glen Waverley VIC",
+          "lat": -37.8795,
+          "lng": 145.162
+        }
+      ],
+      "stopCount": 3,
+      "fifoOrder": [
+        "stop_1",
+        "stop_2",
+        "stop_3"
+      ],
+      "nnOrder": [
+        "stop_3",
+        "stop_1",
+        "stop_2"
+      ],
+      "available": true,
+      "fifoDistanceKm": 16.66,
+      "nnDistanceKm": 16.52,
+      "fifoDurationMin": 29.76,
+      "nnDurationMin": 31.33,
+      "absDistanceDiffKm": 0.14,
+      "pctDistanceDiff": 0.84,
+      "absDurationDiffMin": -1.57,
+      "pctDurationDiff": -5.28,
+      "routeSource": "mapbox",
+      "timestamp": "2026-07-21T01:54:36.282Z",
+      "notes": "",
+      "retries": {
+        "fifo": 0,
+        "nn": 0
+      }
+    }
+  ]
+}
