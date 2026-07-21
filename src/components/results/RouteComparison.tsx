@@ -102,7 +102,7 @@ export function RouteComparison() {
                 className="px-3 py-1.5 rounded-full bg-success-100 dark:bg-success-900/30 border border-success-200 dark:border-success-800"
               >
                 <span className="text-sm font-semibold text-success-700 dark:text-success-400">
-                  <AnimatedCounter value={distanceSavedPercent} decimals={0} suffix="% savings" />
+                  <AnimatedCounter value={distanceSavedPercent} decimals={0} suffix="% shorter" />
                 </span>
               </motion.div>
             )}
@@ -130,7 +130,7 @@ export function RouteComparison() {
             />
             <MetricsCard
               title="Optimized Route"
-              subtitle="AI-powered"
+              subtitle="Nearest-neighbour route"
               metrics={optimizedMetrics}
               variant="primary"
               isSelected={selectedRouteType === 'optimized'}
@@ -155,7 +155,7 @@ export function RouteComparison() {
                       </svg>
                     </div>
                     <h4 className="font-semibold text-success-800 dark:text-success-300">
-                      Estimated Savings with Optimized Route
+                      Difference vs FIFO (this trip)
                     </h4>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
@@ -261,7 +261,7 @@ export function RouteComparison() {
             <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            The optimized route uses a nearest-neighbor heuristic. Results are typically 15-35% better than FIFO but not guaranteed to be absolute optimal.
+            Optimised using a nearest-neighbour heuristic. It does not guarantee the globally shortest road route; illustrative results vary by scenario.
           </p>
         </CardContent>
       </Card>

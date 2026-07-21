@@ -68,7 +68,7 @@ Six Mapbox road scenarios from Monash Clayton (2026-07-21):
 - Duration improved in five; **worse in one** (duplicate Chadstone stops)
 - Median percentage distance difference **16.57%** (range 0.84%–23.27%)
 
-Full raw table: [`route-benchmark-results.md`](./route-benchmark-results.md). Illustrative only — not a scientific operations study and not global optimality.
+Full raw table: [`route-benchmark-results.md`](./route-benchmark-results.md). Illustrative only — not a scientific operations study, not global optimality, and **no fuel-saving result was measured**.
 
 ## Security and privacy
 
@@ -80,7 +80,7 @@ Full raw table: [`route-benchmark-results.md`](./route-benchmark-results.md). Il
 
 ## Limitations
 
-No auth, no central DB, heuristic routing, Haversine vs road mismatch, small benchmark sample, no formal user testing, limited real-device GPS validation, residual base-image CVEs, and AWS may be shut down for cost.
+No auth, no central DB, heuristic routing, Haversine vs road mismatch, small benchmark sample, no fuel-saving measurement, no formal user testing, limited real-device GPS validation, residual base-image CVEs, and AWS may be shut down for cost. Suitable for controlled portfolio demonstration, not enterprise production.
 
 ## Lessons learned
 

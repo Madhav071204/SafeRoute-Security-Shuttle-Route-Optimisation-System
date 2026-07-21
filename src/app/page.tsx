@@ -48,13 +48,13 @@ export default function Home() {
                 className="inline-flex items-center gap-2 px-3 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm font-medium mb-3"
               >
                 <span className="w-2 h-2 bg-primary-500 rounded-full animate-pulse" />
-                AI-Powered Optimization
+                FIFO vs heuristic comparison
               </motion.div>
               <h1 className="text-3xl md:text-4xl font-bold text-surface-900 dark:text-white mb-2">
                 Plan Your Route
               </h1>
               <p className="text-surface-600 dark:text-surface-400 text-lg max-w-2xl">
-                Add passenger destinations, optimize with AI, and start your trip with turn-by-turn guidance.
+                Add passenger destinations, compare FIFO and heuristic route ordering, and start your trip with turn-by-turn guidance.
               </p>
             </div>
             <motion.div
@@ -70,8 +70,8 @@ export default function Home() {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-semibold text-surface-900 dark:text-white">Save up to 35%</p>
-                  <p className="text-surface-500 dark:text-surface-400 text-xs">on travel distance</p>
+                  <p className="font-semibold text-surface-900 dark:text-white">Compare FIFO and heuristic</p>
+                  <p className="text-surface-500 dark:text-surface-400 text-xs">route ordering side by side</p>
                 </div>
               </div>
             </motion.div>

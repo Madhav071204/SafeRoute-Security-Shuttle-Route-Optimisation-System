@@ -5,8 +5,8 @@ import { ThemeProvider } from '@/context/ThemeContext'
 import { AppLayout } from '@/components/layout/AppLayout'
 
 export const metadata: Metadata = {
-  title: 'SafeRoute - AI-Powered Route Optimization',
-  description: 'Intelligent security shuttle route optimization for university campuses. Save time, fuel, and reduce emissions with smart routing.',
+  title: 'SafeRoute - Security Shuttle Route Comparison',
+  description: 'Personal proof-of-concept comparing FIFO and nearest-neighbour stop ordering for security-shuttle style trips. Not an official campus system.',
 }
 
 export default function RootLayout({

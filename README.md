@@ -174,7 +174,7 @@ This sample does **not** support marketing claims of typical percentage savings,
 - Not an official operational shuttle system
 - Residual third-party / base-image risks remain
 - Real-device GPS testing remains limited
-- UI marketing copy (for example “save up to 35%”) may still appear in the product chrome; treat documented benchmark results as the evidence base
+- Suitable for controlled portfolio demonstration, not enterprise production
 
 ## Local setup
 
