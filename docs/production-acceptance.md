@@ -164,8 +164,8 @@ Verified against **deployed** image `sha256:8ef3c63a…` on 2026-07-20 (Phase 6A
 | `NEXT_PUBLIC_MAPBOX_TOKEN` browser-only | **Confirmed** in code |
 | `MAPBOX_ACCESS_TOKEN` server-only | **Confirmed** — Secrets Manager in ECS |
 | Server token absent from GitHub / bundles | **Confirmed** |
-| Production public token URL-restricted | **Blocked — Mapbox dashboard access unavailable in this session** |
-| Separate dev public token | **Documented** in `.env.example` |
+| Production public token URL-restricted | **Confirmed** — operator applied @ 2026-07-20 to `https://sa-2cf22f7190f04affacba88ff88c8e636.ecs.ap-southeast-2.on.aws/*` |
+| Separate dev public token | **Documented** in `.env.example` (confirm localhost restriction if not already separate) |
 
 ### Manual Mapbox dashboard steps (production browser token)
 
@@ -251,19 +251,19 @@ Scan COMPLETE @ 2026-07-20. Counts unchanged; finding mix shifted (Debian `perl`
 | `docs/user-testing-plan.md` | **Created** — no participant results |
 | `docs/route-benchmark-plan.md` | **Created** — no benchmark figures |
 | Full production browser journey | **Pass** (see above) |
-| Automated deploy health gate | **Pending merge** of `fix/deployment-health-gate` |
+| Automated deploy health gate | **Pass** — [CI run 29729117102](https://github.com/Madhav071204/SafeRoute-Security-Shuttle-Route-Optimisation-System/actions/runs/29729117102) @ `521e716` |
 
 ## Manual limitations
 
-1. **Mapbox token URL restrictions** — requires Mapbox account administrator (see below).
+1. **Separate localhost Mapbox dev token** — confirm a distinct public token restricted to `http://localhost:3000/*` if local development uses Mapbox directly.
 2. **OIDC rollback workflow_dispatch** — unavailable until `rollback.yml` is on default branch.
 3. **Campus DNS** — Monash recursive DNS may NXDOMAIN `*.on.aws`; use public resolver.
-4. **CD not fully green** — deploy health step must pass in Actions after health-gate merge.
+4. **User-testing and benchmark execution** — plans prepared; no sessions or figures recorded yet.
 
 ## Production acceptance decision
 
 **Conditionally accepted for controlled portfolio demonstration**
 
-Evidence supports HTTPS availability, Mapbox tiles/autocomplete/road routing on production, full planning→driver journey (Playwright), operator-validated rollback, and automated test baselines. **Remaining blockers:** Mapbox public URL restrictions, fully green CD workflow (health gate merge), and user-testing / benchmark execution.
+Evidence supports HTTPS availability, Mapbox tiles/autocomplete/road routing on production, production public token URL restriction (operator-confirmed), fully green OIDC CD with automated health gate, full planning→driver journey (Playwright), operator-validated rollback, and automated test baselines. **Remaining before stronger acceptance:** user-testing and benchmark execution.
 
 This is **not** enterprise production-ready.

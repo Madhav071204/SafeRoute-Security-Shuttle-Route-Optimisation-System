@@ -154,8 +154,8 @@ Deletes only SafeRoute-named resources (Express service, ECR `saferoute`, log gr
 * [x] Production Playwright smoke (3 tests) passed locally
 * [x] GitHub deploy IAM policy applied (`deploy/aws/apply-github-deploy-policy.ps1`)
 * [x] Full production browser journey (plan → driver → complete) @ Phase 6A
-* [ ] Merge `fix/deployment-health-gate` and confirm deploy health step green in Actions
-* [ ] Restrict Mapbox public token URL origins to the Express HTTPS host (+ localhost for dev)
+* [x] Merge `fix/deployment-health-gate` and confirm deploy health step green in Actions ([run 29729117102](https://github.com/Madhav071204/SafeRoute-Security-Shuttle-Route-Optimisation-System/actions/runs/29729117102))
+* [x] Restrict Mapbox public token URL origins to the Express HTTPS host — operator confirmed @ 2026-07-20
 * [ ] Confirm GitHub Environment protection rules (reviewer / wait timer) if desired
 
 ## Phase 5B — PR #4 merge and first CD (2026-07-20)
