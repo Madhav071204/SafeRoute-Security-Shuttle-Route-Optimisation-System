@@ -21,14 +21,21 @@ const SYNTHETIC_DESTINATIONS = [
 test.use({ baseURL: PRODUCTION_URL })
 
 async function fillStopFromAutocomplete(page: Page, index: number, query: string, label: RegExp) {
+  // Dismiss any open suggestion panel from a previous stop (absolute dropdowns
+  // can sit over the next input and block Playwright's actionability checks).
+  await page.locator('body').click({ position: { x: 8, y: 72 }, force: true })
+  await page.waitForTimeout(200)
+
   const inputs = page.getByPlaceholder('Search address, place, or landmark...')
   const input = inputs.nth(index)
-  await input.click()
+  await input.scrollIntoViewIfNeeded()
+  await input.click({ force: true })
   await input.fill(query)
   const suggestion = page.getByRole('button').filter({ hasText: label }).first()
   await expect(suggestion).toBeVisible({ timeout: 30_000 })
   await suggestion.click()
   await expect(page.getByText('Location selected').nth(index)).toBeVisible({ timeout: 15_000 })
+  await page.locator('body').click({ position: { x: 8, y: 72 }, force: true })
 }
 
 test.describe('Production full journey', () => {
